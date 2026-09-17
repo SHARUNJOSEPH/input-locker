@@ -6,6 +6,10 @@
 [![Tests](https://img.shields.io/badge/tests-154%20passed-success.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/architecture-Win32%20%2F%20PyQt6-informational.svg)](src/)
 
+<p align="center">
+  <img src="assets/branding/github_hero_banner.jpg" alt="Input Locker Hero Banner" width="100%" />
+</p>
+
 A high-performance, zero-latency background utility engineered for Windows live audiovisual (AV) staging and event production environments (e.g., Resolume Arena, Dataton WATCHOUT, QLab, grandMA, DAWs, PowerPoint presentations).
 
 `input-locker` intercepts and swallows all global keyboard and mouse inputs at the Windows OS kernel/hook level to create a tamper-resistant "locked" state, while keeping active background rendering engines fully visible and operating through a non-activating, semi-transparent glass overlay.
@@ -24,6 +28,10 @@ No Python installation or setup is required to use Input Locker!
 4. **Single-Instance Protected**: Double-clicking the app or shortcut will bring the existing window to the front without launching duplicate processes.
 
 ## Architecture & Principles
+
+<p align="center">
+  <img src="assets/branding/security_workflow_infographic.jpg" alt="Input Locker Security Architecture Workflow" width="100%" />
+</p>
 
 1. **Zero Focus Disruption**:
    - The semi-transparent overlay window is constructed with Win32 extended styles `WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW` and displayed via `SetWindowPos` with `SWP_NOACTIVATE | SWP_SHOWWINDOW`.
