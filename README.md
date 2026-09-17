@@ -10,22 +10,51 @@
   <img src="assets/branding/github_hero_banner.jpg" alt="Input Locker Hero Banner" width="100%" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases/latest">
+    <img src="https://img.shields.io/badge/⬇️%20Download-Input%20Locker%20(Windows%20.exe)-0A84FF?style=for-the-badge&logo=windows&logoColor=white" alt="Download Input Locker" />
+  </a>
+  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases/latest">
+    <img src="https://img.shields.io/badge/📦%20Download-Portable%20Zip%20Package-1E293B?style=for-the-badge&logo=windows&logoColor=white" alt="Download Portable Zip" />
+  </a>
+  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
+    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.1.0-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
+  </a>
+</p>
+
 A high-performance, zero-latency background utility engineered for Windows live audiovisual (AV) staging and event production environments (e.g., Resolume Arena, Dataton WATCHOUT, QLab, grandMA, DAWs, PowerPoint presentations).
 
 `input-locker` intercepts and swallows all global keyboard and mouse inputs at the Windows OS kernel/hook level to create a tamper-resistant "locked" state, while keeping active background rendering engines fully visible and operating through a non-activating, semi-transparent glass overlay.
 
 ---
 
-## 🚀 Quick Start (Standalone Executable)
+## 📥 Installation & Download Packages
 
-No Python installation or setup is required to use Input Locker!
+Choose your preferred download package. **No Python or external runtimes are required!**
 
-1. Download the latest **`InputLocker.exe`** or zip from [Releases](https://github.com/SHARUNJOSEPH/input-locker/releases).
-2. Double-click **`InputLocker.exe`** to configure settings or launch into the background.
-3. Use the global hotkeys:
-   - 🔒 **Lock Screen**: Press <kbd>F11</kbd> (or click *Lock Screen Now*).
-   - 🔑 **Unlock Screen**: Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>U</kbd> (enter password if configured).
-4. **Single-Instance Protected**: Double-clicking the app or shortcut will bring the existing window to the front without launching duplicate processes.
+| Package | Format | Architecture | Download Link |
+| :--- | :---: | :---: | :--- |
+| **Input Locker Standalone** | `.exe` | Windows 10 / 11 (64-bit) | [⬇️ **Download `InputLocker.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker.exe) |
+| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Windows-x64.zip) |
+| **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
+
+> [!TIP]
+> **Zero Installation Setup**: Simply download **`InputLocker.exe`**, place it on your Desktop or in your staging folder, and double-click to launch!
+
+---
+
+## 🚀 How to Use Input Locker
+
+1. **Launch**: Double-click **`InputLocker.exe`**.
+   - On first launch, a helpful **Interactive Tutorial Guide** and the **Apple-style Settings** panel will appear.
+2. **Lock Screen**:
+   - Press <kbd>F11</kbd> at any time, or click **"🔒 Lock Screen Now"** in settings.
+   - All mouse and keyboard inputs will be completely blocked while keeping your background video/audio engines running smoothly.
+3. **Unlock Screen**:
+   - Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>U</kbd> together.
+   - If a password is set, the secure unlock prompt will appear; otherwise, it unlocks instantly.
+4. **Single-Instance Protection**:
+   - Double-clicking the app icon while running will simply bring the existing settings window to the front — preventing duplicate processes or multiple windows.
 
 ## Architecture & Principles
 
