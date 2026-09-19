@@ -33,5 +33,6 @@ jobs:
       - name: Run Pytest
         env:
           PYTHONPATH: src
+          QT_QPA_PLATFORM: offscreen
         run: |
           python -m pytest tests/unit/ -v
