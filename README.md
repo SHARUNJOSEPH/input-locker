@@ -2,8 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://microsoft.com/windows)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-154%20passed-success.svg)](tests/)
+[![Security Audit](https://img.shields.io/badge/security-0%20vulnerabilities-success.svg)](.github/workflows/security.yml)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-In%20Review-0078D4.svg?logo=microsoft)](https://partner.microsoft.com/)
+[![Tests](https://img.shields.io/badge/tests-169%20passed-success.svg)](tests/)
 [![Downloads](https://img.shields.io/github/downloads/SHARUNJOSEPH/input-locker/total.svg?style=flat&color=success)](https://github.com/SHARUNJOSEPH/input-locker/releases)
 [![Architecture](https://img.shields.io/badge/architecture-Win32%20%2F%20PyQt6-informational.svg)](src/)
 
@@ -22,6 +23,16 @@
     <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.1.0-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
   </a>
 </p>
+
+---
+
+## 🎬 Live Demo & Staging Workflow
+
+<p align="center">
+  <img src="assets/branding/input_locker_demo.gif" alt="Input Locker Staging Demo" width="100%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);" />
+</p>
+
+*Watch Input Locker in action: seamlessly switching from normal desktop interaction to full OS-level input swallowing in under 3 milliseconds, with a non-activating semi-transparent HUD overlay protecting stage playback.*
 
 A high-performance, zero-latency background utility engineered for Windows live audiovisual (AV) staging and event production environments (e.g., Resolume Arena, Dataton WATCHOUT, QLab, grandMA, DAWs, PowerPoint presentations).
 
@@ -118,8 +129,10 @@ python -m input_locker.main
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--backend` | `win32` \| `pyqt` | `win32` | Overlay rendering engine: `win32` (featherweight pure Win32) or `pyqt` (PyQt6 glass badge). |
+| `--backend` | `win32` \| `pyqt` | `pyqt` | Overlay rendering engine: `pyqt` (styled glass badge) or `win32` (featherweight pure Win32). |
 | `--alpha` | integer (0–255) | `120` | Opacity of the overlay glass (0 = fully transparent, 255 = opaque black). |
+| `--host` | string | `127.0.0.1` | Network interface to bind for OSC/TCP (default: `127.0.0.1` for local defense). |
+| `--bind-all` | flag | `False` | Binds network server to all interfaces (`0.0.0.0`) for external AV console control over LAN. |
 | `--udp-port` | integer | `9000` | UDP port for OSC / JSON show control datagrams (set to 0 for ephemeral). |
 | `--tcp-port` | integer | `9001` | TCP port for line-delimited JSON stream commands (set to 0 for ephemeral). |
 | `--no-network` | flag | `False` | Disables network control listeners (hotkeys only). |
