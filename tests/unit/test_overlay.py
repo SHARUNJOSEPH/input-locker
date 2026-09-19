@@ -201,8 +201,12 @@ class TestWin32Overlay:
             assert show_latency_ms < 200.0, f"Show latency {show_latency_ms:.2f}ms exceeded 200ms"
             assert hide_latency_ms < 200.0, f"Hide latency {hide_latency_ms:.2f}ms exceeded 200ms"
 
+    @pytest.mark.gui
     def test_win32_overlay_zero_focus_disruption(self):
         """Verifies zero WM_ACTIVATE / WM_KILLFOCUS messages reach background apps."""
+        from tests.conftest import is_headless_environment
+        if is_headless_environment():
+            pytest.skip("Skipping focus disruption test in headless environment without active desktop")
         harness = CompanionFocusHarness(title="Target Media Engine (Resolume Arena)")
         harness.start(timeout=3.0)
         try:
@@ -287,8 +291,12 @@ class TestPyQtOverlay:
             assert show_ms < 200.0, f"PyQt show latency {show_ms:.2f}ms exceeded 200ms"
             assert hide_ms < 200.0, f"PyQt hide latency {hide_ms:.2f}ms exceeded 200ms"
 
+    @pytest.mark.gui
     def test_pyqt_overlay_zero_focus_disruption(self):
         """Verifies PyQt6 overlay preserves background window focus with zero events."""
+        from tests.conftest import is_headless_environment
+        if is_headless_environment():
+            pytest.skip("Skipping focus disruption test in headless environment without active desktop")
         harness = CompanionFocusHarness(title="Target DAW (Ableton Live)")
         harness.start(timeout=3.0)
         try:
@@ -373,8 +381,12 @@ class TestOverlayManager:
             assert mgr.is_overlay_visible() is False
             assert mgr.is_cursor_confined() is False
 
+    @pytest.mark.gui
     def test_overlay_manager_zero_focus_disruption(self):
         """Verifies full lock/unlock sequence with OverlayManager emits zero focus messages."""
+        from tests.conftest import is_headless_environment
+        if is_headless_environment():
+            pytest.skip("Skipping focus disruption test in headless environment without active desktop")
         harness = CompanionFocusHarness(title="Target Media Engine (WATCHOUT)")
         harness.start(timeout=3.0)
         try:

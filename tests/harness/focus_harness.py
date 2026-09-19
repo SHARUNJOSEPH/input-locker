@@ -23,6 +23,7 @@ WPARAM = wintypes.WPARAM
 LPARAM = wintypes.LPARAM
 UINT = wintypes.UINT
 HWND = wintypes.HWND
+HCURSOR = getattr(wintypes, "HCURSOR", getattr(wintypes, "HICON", wintypes.HANDLE))
 
 WNDPROC = ctypes.WINFUNCTYPE(LRESULT, HWND, UINT, WPARAM, LPARAM)
 _ACTIVE_WNDPROCS = []
@@ -258,7 +259,7 @@ class CompanionFocusHarness:
                 ('cbWndExtra', ctypes.c_int),
                 ('hInstance', wintypes.HINSTANCE),
                 ('hIcon', wintypes.HICON),
-                ('hCursor', wintypes.HCURSOR),
+                ('hCursor', HCURSOR),
                 ('hbrBackground', wintypes.HBRUSH),
                 ('lpszMenuName', wintypes.LPCWSTR),
                 ('lpszClassName', wintypes.LPCWSTR),

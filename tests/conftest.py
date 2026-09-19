@@ -25,8 +25,32 @@ from typing import Generator, Tuple, Dict, Any, Optional
 
 # Defensive shim in test environment in case implementation module forgot import ctypes
 builtins.ctypes = ctypes
+try:
+    from ctypes import wintypes
+    if not hasattr(wintypes, "HCURSOR"):
+        wintypes.HCURSOR = getattr(wintypes, "HICON", getattr(wintypes, "HANDLE", ctypes.c_void_p))
+except Exception:
+    pass
 
 import pytest
+
+
+def is_headless_environment() -> bool:
+    """Returns True if running in a headless CI environment or without an interactive desktop."""
+    if os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true":
+        return True
+    try:
+        h_desk = ctypes.windll.user32.OpenInputDesktop(0, False, 0x01FF)
+        if not h_desk:
+            return True
+        ctypes.windll.user32.CloseDesktop(h_desk)
+    except Exception:
+        return True
+    return False
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "gui: mark test as requiring interactive GUI / physical display")
 
 # Ensure `src` and project root are on sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -147,6 +171,8 @@ TestController = TestControllerWrapper
 @pytest.fixture(scope="function")
 def focus_harness() -> Generator[CompanionFocusHarness, None, None]:
     """Provides a started, clean CompanionFocusHarness window on the active desktop."""
+    if is_headless_environment():
+        pytest.skip("Skipping focus harness in headless environment without active desktop")
     harness = CompanionFocusHarness()
     harness.start(timeout=3.0)
     harness.clear()

@@ -194,6 +194,9 @@ def _global_overlay_wndproc(hwnd: int, msg: int, wparam: int, lparam: int) -> in
 GLOBAL_OVERLAY_WNDPROC_CB = WNDPROC(_global_overlay_wndproc)
 
 
+HCURSOR = getattr(wintypes, "HCURSOR", getattr(wintypes, "HICON", wintypes.HANDLE))
+
+
 class WNDCLASSW(ctypes.Structure):
     """Win32 WNDCLASSW structure."""
     _fields_ = [
@@ -203,7 +206,7 @@ class WNDCLASSW(ctypes.Structure):
         ("cbWndExtra", ctypes.c_int),
         ("hInstance", wintypes.HINSTANCE),
         ("hIcon", wintypes.HICON),
-        ("hCursor", wintypes.HCURSOR),
+        ("hCursor", HCURSOR),
         ("hbrBackground", wintypes.HBRUSH),
         ("lpszMenuName", wintypes.LPCWSTR),
         ("lpszClassName", wintypes.LPCWSTR),

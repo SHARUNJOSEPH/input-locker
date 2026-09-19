@@ -577,12 +577,19 @@ class TestHookIntegrationCycle:
         assert ef.swallowed_keyboard_count == before_count
 
 
+@pytest.mark.gui
 @pytest.mark.skipif(
     not hasattr(ctypes, "windll"),
     reason="Live SendInput hooks require Windows OS",
 )
 class TestLiveWindowsHooksWithSendInput:
     """Live integration tests using Win32 SendInput and active hook threads."""
+
+    @pytest.fixture(autouse=True)
+    def check_interactive(self):
+        from tests.conftest import is_headless_environment
+        if is_headless_environment():
+            pytest.skip("Skipping live SendInput test in headless environment without active desktop")
 
     @staticmethod
     def _send_synthetic_key(vk: int, is_down: bool) -> None:
