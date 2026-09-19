@@ -26,11 +26,12 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -e .
+          python -m pip install pynput PyQt6 pystray Pillow pytest
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
 
       - name: Run Pytest
         env:
           PYTHONPATH: src
         run: |
-          pytest tests/unit/ -v
+          python -m pytest tests/unit/ -v
