@@ -1,0 +1,50 @@
+name: "💡 Feature Request"
+description: "Suggest an idea or enhancement for Input Locker"
+title: "[Feature]: "
+labels: ["enhancement", "feature-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to make **Input Locker** even better for live AV production, staging, or broadcast?
+        Tell us about your proposed workflow or feature enhancement!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a specific problem or workflow?
+      description: A clear and concise description of what the problem or staging limitation is.
+      placeholder: "When operating in theatre / multi-user environments, I need..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: A clear and concise description of what you want to happen.
+      placeholder: "Add an option to customize the lock hotkey from F11 to custom key combinations..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Describe alternatives you've considered
+      description: Any alternative solutions or features you've evaluated.
+      placeholder: "Currently I use external AutoHotkey scripts, but..."
+
+  - type: dropdown
+    id: av_hardware
+    attributes:
+      label: Production / AV Environment
+      description: Which live show software or hardware would this integrate with?
+      options:
+        - "Bitfocus Companion / Stream Deck"
+        - "Figure 53 QLab"
+        - "Resolume Arena / Avenue"
+        - "Dataton WATCHOUT"
+        - "TouchDesigner"
+        - "DAW (Ableton Live, Pro Tools, Reaper)"
+        - "Corporate / Church / Kiosk Display"
+        - "Other"

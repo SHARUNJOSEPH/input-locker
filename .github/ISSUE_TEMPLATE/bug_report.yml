@@ -1,0 +1,78 @@
+name: "🐛 Bug Report"
+description: "File a bug or unexpected behavior in Input Locker"
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue with **Input Locker**!
+        Please fill out this form to help us diagnose and resolve the problem quickly.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the problem...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Launch Input Locker with '...'
+        2. Press F11 to lock
+        3. Observe that '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What did you expect to happen versus what actually happened?
+      placeholder: |
+        Expected: The overlay should appear and swallow all inputs.
+        Actual: Mouse cursor remained visible on monitor 2.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment_version
+    attributes:
+      label: Input Locker Version
+      description: Which build or version of Input Locker are you running?
+      options:
+        - "v0.1.0 (Latest Release)"
+        - "Microsoft Store Build"
+        - "winget package"
+        - "Standalone InputLocker.exe"
+        - "Source code (Python main branch)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os_version
+    attributes:
+      label: Windows Operating System
+      options:
+        - "Windows 11 (23H2 or newer)"
+        - "Windows 11 (22H2)"
+        - "Windows 10 (22H2 / 21H2)"
+        - "Windows Server 2022 / 2019"
+        - "Other (specify below)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Console Output / Screenshots
+      description: Paste any error messages or attach screenshots. (Logs can be found in terminal or by running with `-v`).
+      render: shell
+      placeholder: |
+        [INFO] Starting Windows AV Staging Input Locker...

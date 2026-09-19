@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "🎛️ AV Show Control & Staging Guide"
+    url: "https://github.com/SHARUNJOSEPH/input-locker/blob/main/docs/SHOW_CONTROL_GUIDE.md"
+    about: "Read turnkey integration guides for QLab, Bitfocus Companion, OSC, and Resolume."
+  - name: "📦 Windows Package Manager (winget) Submission"
+    url: "https://github.com/microsoft/winget-pkgs/pull/437554"
+    about: "Track official winget package approval and status."
+  - name: "💬 GitHub Discussions & Community Q&A"
+    url: "https://github.com/SHARUNJOSEPH/input-locker/discussions"
+    about: "Ask questions, share setup photos, or discuss staging workflows with the community."
