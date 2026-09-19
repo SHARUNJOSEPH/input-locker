@@ -51,6 +51,13 @@ Choose your preferred download package. **No Python or external runtimes are req
 | **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Windows-x64.zip) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 
+### ⚡ Command-Line Install (`winget`)
+
+```powershell
+winget install SharunJoseph.InputLocker
+```
+*(Official package manifests in [`packaging/winget`](packaging/winget/) — see [Winget Submission Guide](docs/WINGET_SUBMISSION.md))*
+
 > [!TIP]
 > **Zero Installation Setup**: Simply download **`InputLocker.exe`**, place it on your Desktop or in your staging folder, and double-click to launch!
 
