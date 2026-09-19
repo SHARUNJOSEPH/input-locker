@@ -38,10 +38,14 @@ class TestConfigGui(unittest.TestCase):
         self.assertEqual(CREATOR_GITHUB, "https://github.com/SHARUNJOSEPH")
 
     def test_make_avatar_image(self):
+        if not self.root:
+            self.skipTest("Headless environment: Tk root not available for PhotoImage")
         img = _make_avatar_image(44, master=self.root)
         self.assertIsNotNone(img)
 
     def test_make_thumbnail_valid(self):
+        if not self.root:
+            self.skipTest("Headless environment: Tk root not available for PhotoImage")
         with NamedTemporaryFile(suffix=".png", delete=False) as f:
             temp_path = f.name
         try:
