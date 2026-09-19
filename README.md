@@ -35,7 +35,8 @@ Choose your preferred download package. **No Python or external runtimes are req
 
 | Package | Format | Architecture | Download Link |
 | :--- | :---: | :---: | :--- |
-| **Input Locker Standalone** | `.exe` | Windows 10 / 11 (64-bit) | [⬇️ **Download `InputLocker.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker.exe) |
+| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.1.0.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Setup-v0.1.0.exe) |
+| **Input Locker Standalone** | Portable `.exe` | Windows 10 / 11 (64-bit) | [⬇️ **Download `InputLocker.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker.exe) |
 | **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Windows-x64.zip) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 

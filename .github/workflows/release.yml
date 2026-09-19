@@ -36,12 +36,26 @@ jobs:
         run: |
           Compress-Archive -Path dist/InputLocker.exe -DestinationPath dist/InputLocker-Windows-x64.zip
 
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress
+
+      - name: Build Windows Setup Installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          }
+          & $iscc installer\input_locker_setup.iss
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/InputLocker.exe
             dist/InputLocker-Windows-x64.zip
+            dist/InputLocker-Setup-v*.exe
           draft: false
           prerelease: false
           generate_release_notes: true
