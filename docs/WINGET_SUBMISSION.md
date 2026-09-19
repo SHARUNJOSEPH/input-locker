@@ -11,7 +11,7 @@ This document outlines the official process for publishing, testing, and updatin
 - **Installer Type**: `inno` (Inno Setup 6)
 - **Architecture**: `x64`
 - **Download URL**: `https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.1.0/InputLocker-Setup-v0.1.0.exe`
-- **Installer SHA256**: `0B05A9C822CA6A5C2D04C6672CFF42E0BBBA74E891CEA495D22D37A948958563`
+- **Installer SHA256**: `8E0D4E811E282BBEA24C9213F3F43779F80085FB538560BA6690570A150F4CFD`
 - **Silent Install Flags**: `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`
 - **Official Submission PR**: [microsoft/winget-pkgs #437554](https://github.com/microsoft/winget-pkgs/pull/437554) (Status: Submitted & Validating)
 
