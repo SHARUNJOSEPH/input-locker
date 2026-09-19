@@ -19,15 +19,19 @@ from input_locker.ui.config_gui import (
 
 class TestConfigGui(unittest.TestCase):
     def setUp(self):
-        self.root = tk.Tk()
-        self.root.withdraw()
+        try:
+            self.root = tk.Tk()
+            self.root.withdraw()
+        except (tk.TclError, Exception):
+            self.root = None
 
     def tearDown(self):
-        try:
-            self.root.update_idletasks()
-            self.root.destroy()
-        except Exception:
-            pass
+        if self.root:
+            try:
+                self.root.update_idletasks()
+                self.root.destroy()
+            except Exception:
+                pass
 
     def test_creator_links(self):
         self.assertEqual(CREATOR_LINKEDIN, "https://www.linkedin.com/in/joseph-sharun/")
@@ -53,6 +57,8 @@ class TestConfigGui(unittest.TestCase):
         self.assertIsNone(thumb)
 
     def test_show_about_dialog(self):
+        if not self.root:
+            self.skipTest("Headless environment: Tk root not available")
         show_about_dialog(parent=self.root)
         toplevels = [w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel)]
         self.assertTrue(len(toplevels) >= 1)
@@ -63,6 +69,8 @@ class TestConfigGui(unittest.TestCase):
         self.root.update()
 
     def test_show_tutorial_dialog(self):
+        if not self.root:
+            self.skipTest("Headless environment: Tk root not available")
         finished = [False]
         def on_fin():
             finished[0] = True
