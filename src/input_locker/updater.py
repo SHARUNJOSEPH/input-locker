@@ -1,4 +1,4 @@
-﻿"""Automatic version update checker for Input Locker.
+"""Automatic version update checker for Input Locker.
 
 Implements non-blocking, offline-safe update discovery via GitHub Releases API
 or custom JSON release manifests.
@@ -17,7 +17,7 @@ from input_locker import __version__
 logger = logging.getLogger(__name__)
 
 # Default repository to check for releases (can be overridden in config.json)
-DEFAULT_UPDATE_REPO = "input-locker/input-locker"
+DEFAULT_UPDATE_REPO = "SHARUNJOSEPH/input-locker"
 _DEFAULT_TIMEOUT_S = 3.0
 
 

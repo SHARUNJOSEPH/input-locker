@@ -4,6 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://microsoft.com/windows)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-154%20passed-success.svg)](tests/)
+[![Downloads](https://img.shields.io/github/downloads/SHARUNJOSEPH/input-locker/total.svg?style=flat&color=success)](https://github.com/SHARUNJOSEPH/input-locker/releases)
 [![Architecture](https://img.shields.io/badge/architecture-Win32%20%2F%20PyQt6-informational.svg)](src/)
 
 <p align="center">

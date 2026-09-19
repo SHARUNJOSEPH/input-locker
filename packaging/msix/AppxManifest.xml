@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="JosephSharun.InputLocker"
+    Publisher="CN=Joseph Sharun, O=Joseph Sharun, L=Dubai, C=AE"
+    Version="0.1.0.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Input Locker</DisplayName>
+    <PublisherDisplayName>Joseph Sharun</PublisherDisplayName>
+    <Logo>assets\store\StoreLogo.png</Logo>
+    <Description>High-performance zero-latency Windows AV staging lock and global input interception utility for live production and events.</Description>
+  </Properties>
+
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <!-- runFullTrust allows full Win32 execution for low-level OS hooks (WH_KEYBOARD_LL / WH_MOUSE_LL) -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+  <Applications>
+    <Application
+      Id="InputLocker"
+      Executable="InputLocker.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Input Locker"
+        Description="AV Staging Lock &amp; Global Input Interception"
+        BackgroundColor="#0B0F19"
+        Square150x150Logo="assets\store\Square150x150Logo.png"
+        Square44x44Logo="assets\store\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="assets\store\Wide310x150Logo.png"
+          Square71x71Logo="assets\store\Square44x44Logo.png" />
+        <uap:SplashScreen Image="assets\branding\github_hero_banner.jpg" BackgroundColor="#0B0F19" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+</Package>
