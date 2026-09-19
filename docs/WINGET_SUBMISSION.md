@@ -13,6 +13,7 @@ This document outlines the official process for publishing, testing, and updatin
 - **Download URL**: `https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.1.0/InputLocker-Setup-v0.1.0.exe`
 - **Installer SHA256**: `0B05A9C822CA6A5C2D04C6672CFF42E0BBBA74E891CEA495D22D37A948958563`
 - **Silent Install Flags**: `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`
+- **Official Submission PR**: [microsoft/winget-pkgs #437554](https://github.com/microsoft/winget-pkgs/pull/437554) (Status: Submitted & Validating)
 
 ---
 
