@@ -2,11 +2,11 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://microsoft.com/windows)
+[![CI Build](https://github.com/SHARUNJOSEPH/input-locker/actions/workflows/ci.yml/badge.svg)](https://github.com/SHARUNJOSEPH/input-locker/actions/workflows/ci.yml)
 [![Security Audit](https://img.shields.io/badge/security-0%20vulnerabilities-success.svg)](.github/workflows/security.yml)
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-In%20Review-0078D4.svg?logo=microsoft)](https://partner.microsoft.com/)
-[![Tests](https://img.shields.io/badge/tests-169%20passed-success.svg)](tests/)
+[![Roadmap](https://img.shields.io/badge/Roadmap-Feature%20Releases-7C3AED.svg?logo=github)](https://github.com/users/SHARUNJOSEPH/projects/3)
 [![Downloads](https://img.shields.io/github/downloads/SHARUNJOSEPH/input-locker/total.svg?style=flat&color=success)](https://github.com/SHARUNJOSEPH/input-locker/releases)
-[![Architecture](https://img.shields.io/badge/architecture-Win32%20%2F%20PyQt6-informational.svg)](src/)
 
 <p align="center">
   <img src="assets/branding/github_hero_banner.jpg" alt="Input Locker Hero Banner" width="100%" />
@@ -18,6 +18,9 @@
   </a>
   <a href="https://github.com/SHARUNJOSEPH/input-locker/releases/latest">
     <img src="https://img.shields.io/badge/📦%20Download-Portable%20Zip%20Package-1E293B?style=for-the-badge&logo=windows&logoColor=white" alt="Download Portable Zip" />
+  </a>
+  <a href="https://github.com/users/SHARUNJOSEPH/projects/3">
+    <img src="https://img.shields.io/badge/🚀%20Roadmap-Releases%20%26%20Backlog-4F46E5?style=for-the-badge&logo=github&logoColor=white" alt="Roadmap & Releases" />
   </a>
   <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
     <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.1.0-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
