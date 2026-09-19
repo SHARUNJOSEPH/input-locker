@@ -61,10 +61,18 @@ def check_for_updates(
         Dict with release metadata if a newer version is available, else None.
     """
     repo = repo_or_url.strip() or DEFAULT_UPDATE_REPO
-    if repo.startswith("http://") or repo.startswith("https://"):
+    if repo.startswith("https://"):
         endpoint = repo
+    elif repo.startswith("http://"):
+        logger.warning("Insecure HTTP update URL rejected: %s", repo)
+        return None
     else:
         endpoint = f"https://api.github.com/repos/{repo}/releases/latest"
+
+    # Enforce HTTPS scheme for security
+    if not endpoint.startswith("https://"):
+        logger.warning("Non-HTTPS update endpoint rejected for security: %s", endpoint)
+        return None
 
     try:
         req = urllib.request.Request(
@@ -74,7 +82,7 @@ def check_for_updates(
                 "Accept": "application/vnd.github.v3+json",
             },
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
             if resp.status != 200:
                 return None
             data = json.loads(resp.read().decode("utf-8"))

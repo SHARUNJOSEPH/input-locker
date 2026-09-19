@@ -1,0 +1,39 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly security scan on Mondays at 06:00 UTC
+    - cron: '0 6 * * 1'
+
+jobs:
+  security-audit:
+    name: Security Vulnerability & Code Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies & Security Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bandit pip-audit
+
+      - name: Run Bandit AST Static Security Analysis
+        run: |
+          # Fails if any Medium or High severity issues are discovered
+          bandit -r src/ -ll -v
+
+      - name: Run Pip-Audit Dependency Vulnerability Check
+        run: |
+          # Checks installed packages against OSV / PyPI vulnerability databases
+          pip-audit -r requirements.txt

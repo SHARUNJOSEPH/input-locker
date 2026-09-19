@@ -22,6 +22,24 @@ class TestSecurity(unittest.TestCase):
         self.assertTrue(cfg.verify('MyStrongPassword'))
         self.assertFalse(cfg.verify('Wrong'))
 
+    def test_locker_config_never_persists_plaintext_password(self):
+        import tempfile
+        from pathlib import Path
+        cfg = LockerConfig()
+        cfg.set_password('SuperSecretPass')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / 'config.json'
+            with patch('input_locker.config._CONFIG_PATH', tmp_path):
+                cfg.save()
+                saved_content = tmp_path.read_text(encoding='utf-8')
+                self.assertNotIn('SuperSecretPass', saved_content)
+                self.assertIn('password_hash', saved_content)
+                
+                # Test loading sanitizes any legacy plaintext
+                loaded = LockerConfig.load()
+                self.assertEqual(loaded.password, '')
+                self.assertTrue(loaded.verify('SuperSecretPass'))
+
 
 class TestUpdater(unittest.TestCase):
     def test_version_parsing(self):
@@ -58,3 +76,9 @@ class TestUpdater(unittest.TestCase):
         mock_urlopen.side_effect = Exception('Network unreachable')
         res = check_for_updates(current_version='0.1.0')
         self.assertIsNone(res)
+
+    @patch('urllib.request.urlopen')
+    def test_check_for_updates_blocks_insecure_scheme(self, mock_urlopen):
+        res = check_for_updates(repo_or_url='http://insecure-host.com/release.json')
+        self.assertIsNone(res)
+        mock_urlopen.assert_not_called()

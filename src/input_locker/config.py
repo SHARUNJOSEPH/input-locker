@@ -107,8 +107,8 @@ class LockerConfig:
                 if pw and not h:
                     h, s = hash_password(pw)
 
-                return cls(
-                    password=pw,
+                instance = cls(
+                    password="",  # Security: do not keep plaintext password in memory longer than needed
                     password_hash=h,
                     password_salt=s,
                     wallpaper=data.get("wallpaper", ""),
@@ -118,11 +118,18 @@ class LockerConfig:
                     update_repo=data.get("update_repo", ""),
                     first_run=data.get("first_run", False),
                 )
+                # If the legacy config contained a plaintext password, immediately resave with hash-only
+                if pw:
+                    instance.save()
+                return instance
             except Exception:
                 pass
         return cls()
 
     def save(self) -> None:
+        """Saves configuration to disk, strictly omitting any plaintext password."""
         _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _CONFIG_PATH.write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False), encoding="utf-8")
+        data = asdict(self)
+        data["password"] = ""  # Security: never write plaintext password to disk
+        _CONFIG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 

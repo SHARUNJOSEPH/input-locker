@@ -34,7 +34,7 @@ class NetworkServer:
         controller: Any = None,
         udp_port: int = 9000,
         tcp_port: int = 9001,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         state_machine: Any = None,
     ):
         """Initializes the NetworkServer.
@@ -43,7 +43,7 @@ class NetworkServer:
             controller: Coordinator (LockerController) or StateMachine.
             udp_port: UDP port for OSC / JSON datagrams (default 9000, 0 for dynamic).
             tcp_port: TCP port for line-delimited JSON stream (default 9001, 0 for dynamic).
-            host: Binding interface IP (default '0.0.0.0' for all interfaces).
+            host: Binding interface IP (default '127.0.0.1' for local security, '0.0.0.0' for LAN).
             state_machine: Alias for controller for contract compatibility.
         """
         resolved_ctrl = controller if controller is not None else state_machine

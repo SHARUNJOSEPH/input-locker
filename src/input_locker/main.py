@@ -62,6 +62,17 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="JSON over TCP automation and health check port. Default: 9001",
     )
     parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Network interface to bind (default: 127.0.0.1 for localhost only). Use 0.0.0.0 or --bind-all for LAN AV staging.",
+    )
+    parser.add_argument(
+        "--bind-all",
+        action="store_true",
+        help="Bind network server to all interfaces (0.0.0.0) to allow remote AV console control over LAN.",
+    )
+    parser.add_argument(
         "--no-network",
         action="store_true",
         help="Disable network remote control listeners.",
@@ -223,13 +234,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.no_network:
         try:
             from input_locker.network.server import NetworkController
+            effective_host = "0.0.0.0" if args.bind_all else args.host  # nosec B104
             network_server = NetworkController(
                 controller=controller,
                 udp_port=args.udp_port,
                 tcp_port=args.tcp_port,
+                host=effective_host,
             )
             logger.info(
-                "Network show control enabled: OSC UDP=%d, JSON TCP=%d",
+                "Network show control enabled (%s): OSC UDP=%d, JSON TCP=%d",
+                effective_host,
                 args.udp_port,
                 args.tcp_port,
             )
