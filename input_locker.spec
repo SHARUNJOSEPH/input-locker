@@ -1,24 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import sys
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
 
 project_root = Path('.').resolve()
 assets_dir = project_root / 'assets'
 
+# Ensure src is on sys.path during spec analysis
+src_path = str(project_root / 'src')
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 datas = [
     (str(assets_dir), 'assets'),
 ]
-
+binaries = []
 hiddenimports = [
-    'pynput.keyboard._win32',
-    'pynput.mouse._win32',
-    'pystray._win32',
     'PIL',
     'PIL.Image',
     'PIL.ImageTk',
     'PIL.ImageDraw',
     'PIL.ImageFont',
+    'PyQt6',
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
@@ -27,10 +32,25 @@ hiddenimports = [
     'tkinter.messagebox',
 ]
 
+# Collect all pynput components (submodules, binaries, datas)
+pynput_datas, pynput_binaries, pynput_hidden = collect_all('pynput')
+datas += pynput_datas
+binaries += pynput_binaries
+hiddenimports += pynput_hidden
+
+# Collect all pystray components
+pystray_datas, pystray_binaries, pystray_hidden = collect_all('pystray')
+datas += pystray_datas
+binaries += pystray_binaries
+hiddenimports += pystray_hidden
+
+# Collect all input_locker modules
+hiddenimports += collect_submodules('input_locker')
+
 a = Analysis(
     ['src/input_locker/main.py'],
     pathex=['src'],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
