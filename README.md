@@ -258,6 +258,9 @@ Supports Open Sound Control 1.0 datagrams natively compatible with QLab, Bitfocu
 - `/input_locker/status`: Queries current state (replies with `/input_locker/status <state>`).
 - `/input_locker/toggle`: Toggles between locked and unlocked.
 
+> [!TIP]
+> **Complete Turnkey Show Control Guide**: See our [**AV Show Control & Staging Integration Guide**](docs/SHOW_CONTROL_GUIDE.md) for ready-to-import Bitfocus Companion templates, QLab cue lists, Resolume Arena setups, and TouchDesigner scripts!
+
 ---
 
 ## Staging Safety & Focus Preservation

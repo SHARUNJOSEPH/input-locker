@@ -1,0 +1,125 @@
+{
+  "version": 3,
+  "type": "page",
+  "page": {
+    "name": "Input Locker AV Control",
+    "gridSize": {
+      "columns": 8,
+      "rows": 4
+    },
+    "controls": {
+      "0,0": {
+        "type": "button",
+        "style": {
+          "text": "🔒\\nINPUT\\nLOCK",
+          "size": "14",
+          "color": 16777215,
+          "bgcolor": 9109504,
+          "alignment": "center:center",
+          "pngalignment": "center:center"
+        },
+        "steps": {
+          "0": {
+            "action_sets": {
+              "down": [
+                {
+                  "id": "osc_lock",
+                  "action": "osc:send_message",
+                  "options": {
+                    "path": "/input_locker/lock",
+                    "args": ""
+                  }
+                }
+              ],
+              "up": []
+            }
+          }
+        }
+      },
+      "0,1": {
+        "type": "button",
+        "style": {
+          "text": "🔓\\nINPUT\\nUNLOCK",
+          "size": "14",
+          "color": 16777215,
+          "bgcolor": 25600,
+          "alignment": "center:center",
+          "pngalignment": "center:center"
+        },
+        "steps": {
+          "0": {
+            "action_sets": {
+              "down": [
+                {
+                  "id": "osc_unlock",
+                  "action": "osc:send_message",
+                  "options": {
+                    "path": "/input_locker/unlock",
+                    "args": ""
+                  }
+                }
+              ],
+              "up": []
+            }
+          }
+        }
+      },
+      "0,2": {
+        "type": "button",
+        "style": {
+          "text": "⚡\\nTOGGLE\\nLOCK",
+          "size": "14",
+          "color": 16777215,
+          "bgcolor": 13936640,
+          "alignment": "center:center",
+          "pngalignment": "center:center"
+        },
+        "steps": {
+          "0": {
+            "action_sets": {
+              "down": [
+                {
+                  "id": "osc_toggle",
+                  "action": "osc:send_message",
+                  "options": {
+                    "path": "/input_locker/toggle",
+                    "args": ""
+                  }
+                }
+              ],
+              "up": []
+            }
+          }
+        }
+      },
+      "0,3": {
+        "type": "button",
+        "style": {
+          "text": "📊\\nSTATUS\\nQUERY",
+          "size": "14",
+          "color": 16777215,
+          "bgcolor": 2375835,
+          "alignment": "center:center",
+          "pngalignment": "center:center"
+        },
+        "steps": {
+          "0": {
+            "action_sets": {
+              "down": [
+                {
+                  "id": "osc_status",
+                  "action": "osc:send_message",
+                  "options": {
+                    "path": "/input_locker/status",
+                    "args": ""
+                  }
+                }
+              ],
+              "up": []
+            }
+          }
+        }
+      }
+    }
+  }
+}
