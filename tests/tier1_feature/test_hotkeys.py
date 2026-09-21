@@ -163,3 +163,15 @@ class TestHotkeysFeature:
             InputInjector.press_f11(duration_s=0.005)
         time.sleep(0.05)
         assert test_controller.is_locked
+
+    def test_dynamic_hotkey_rebinding(self, test_controller: TestController):
+        """Verify dynamic hotkey rebinding at runtime updates the active triggers."""
+        test_controller.controller.set_hotkeys(lock_hotkey="F9", unlock_hotkey="Ctrl+Alt+Shift+L")
+        ef = test_controller.controller.hook_manager.event_filter
+        assert ef.lock_hotkey == "F9"
+        assert ef.unlock_hotkey == "Ctrl+Alt+Shift+L"
+
+        # Restore defaults
+        test_controller.controller.set_hotkeys(lock_hotkey="F11", unlock_hotkey="Ctrl+Alt+Shift+U")
+        assert ef.lock_hotkey == "F11"
+        assert ef.unlock_hotkey == "Ctrl+Alt+Shift+U"

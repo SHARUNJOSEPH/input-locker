@@ -84,6 +84,8 @@ class HookManager:
         on_lock_hotkey: Optional[Callable[[], None]] = None,
         on_unlock_hotkey: Optional[Callable[[], None]] = None,
         swallow_active: bool = False,
+        lock_hotkey: str = "F11",
+        unlock_hotkey: str = "Ctrl+Alt+Shift+U",
     ) -> None:
         self._on_lock_hotkey = on_lock_hotkey
         self._on_unlock_hotkey = on_unlock_hotkey
@@ -93,12 +95,22 @@ class HookManager:
             on_lock_hotkey=self._on_lock_hotkey,
             on_unlock_hotkey=self._on_unlock_hotkey,
             swallow_active=self._swallow_active,
+            lock_hotkey=lock_hotkey,
+            unlock_hotkey=unlock_hotkey,
         )
 
         self._keyboard_listener: Optional[DesktopAttachedKeyboardListener] = None
         self._mouse_listener: Optional[DesktopAttachedMouseListener] = None
         self._running: bool = False
         self._lock: threading.Lock = threading.Lock()
+
+    def set_hotkeys(
+        self,
+        lock_hotkey: Optional[str] = None,
+        unlock_hotkey: Optional[str] = None,
+    ) -> None:
+        """Update lock and/or unlock hotkeys dynamically."""
+        self._event_filter.set_hotkeys(lock_hotkey=lock_hotkey, unlock_hotkey=unlock_hotkey)
 
     @property
     def event_filter(self) -> EventFilter:

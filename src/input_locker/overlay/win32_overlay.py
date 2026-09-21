@@ -280,11 +280,17 @@ class Win32Overlay:
                     logger.error(f"Failed to register Win32Overlay class: {_kernel32.GetLastError()}")
 
     def _get_virtual_desktop_bounds(self) -> Tuple[int, int, int, int]:
-        """Queries primary screen metrics covering ONLY the main physical display."""
-        # 0 = SM_CXSCREEN, 1 = SM_CYSCREEN (primary monitor only)
-        vw = _user32.GetSystemMetrics(0)
-        vh = _user32.GetSystemMetrics(1)
-        return (0, 0, vw, vh)
+        """Queries virtual screen metrics covering all physical displays."""
+        vx = _user32.GetSystemMetrics(76)  # SM_XVIRTUALSCREEN
+        vy = _user32.GetSystemMetrics(77)  # SM_YVIRTUALSCREEN
+        vw = _user32.GetSystemMetrics(78)  # SM_CXVIRTUALSCREEN
+        vh = _user32.GetSystemMetrics(79)  # SM_CYVIRTUALSCREEN
+        # Fallback to primary screen metrics if virtual screen metrics are unavailable
+        if vw <= 0 or vh <= 0:
+            vw = _user32.GetSystemMetrics(0)  # SM_CXSCREEN
+            vh = _user32.GetSystemMetrics(1)  # SM_CYSCREEN
+            vx, vy = 0, 0
+        return (vx, vy, vw, vh)
 
     def _worker_thread(self) -> None:
         """Dedicated UI thread creating the window and pumping messages."""

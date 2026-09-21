@@ -180,10 +180,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         should_lock = getattr(locker_cfg, "lock_on_launch", True)
 
-    if effective_password or effective_hash:
-        logger.info("Lock Hotkey: F11 | Unlock Combo: Ctrl + Alt + Shift + U (password protected)")
-    else:
-        logger.info("Lock Hotkey: F11 | Unlock Combo: Ctrl + Alt + Shift + U")
+    effective_lock_hotkey = getattr(locker_cfg, "lock_hotkey", "F11")
+    effective_unlock_hotkey = getattr(locker_cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U")
+    effective_audio_feedback = getattr(locker_cfg, "audio_feedback", False)
+
+    pwd_suffix = " (password protected)" if (effective_password or effective_hash) else ""
+    logger.info("Lock Hotkey: %s | Unlock Combo: %s%s", effective_lock_hotkey, effective_unlock_hotkey, pwd_suffix)
+    if effective_audio_feedback:
+        logger.info("Audio Feedback: Enabled (Acoustic confirmation cues)")
 
     # ── System tray icon ───────────────────────────────────────────────────
     tray = None
@@ -225,6 +229,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         password_salt=effective_salt,
         wallpaper=effective_wallpaper,
         on_state_change=_on_state_change,
+        audio_feedback=effective_audio_feedback,
+        lock_hotkey=effective_lock_hotkey,
+        unlock_hotkey=effective_unlock_hotkey,
     )
     if tray is not None:
         _tray_ref.append(controller)   # now the tray lambdas can reach the controller

@@ -60,6 +60,9 @@ class LockerController:
         password_salt: str = "",
         on_state_change: Optional[Any] = None,
         wallpaper: str = "",
+        audio_feedback: bool = False,
+        lock_hotkey: str = "F11",
+        unlock_hotkey: str = "Ctrl+Alt+Shift+U",
     ) -> None:
         """Initialize the LockerController.
 
@@ -76,6 +79,9 @@ class LockerController:
             password_salt: Cryptographic random salt for the password hash.
             on_state_change: Optional callable(locked: bool) fired after each transition.
             wallpaper: Optional absolute path to a lock screen wallpaper image.
+            audio_feedback: Whether to play acoustic confirmation chime on lock/unlock.
+            lock_hotkey: Keyboard hotkey string to trigger lock (default 'F11').
+            unlock_hotkey: Keyboard hotkey combo to trigger unlock (default 'Ctrl+Alt+Shift+U').
         """
         self._lock = threading.RLock()
         self._is_running = False
@@ -84,6 +90,9 @@ class LockerController:
         self._password_hash = password_hash
         self._password_salt = password_salt
         self._on_state_change = on_state_change
+        self.audio_feedback = bool(audio_feedback)
+        self._lock_hotkey = lock_hotkey
+        self._unlock_hotkey = unlock_hotkey
 
         # 1. Initialize State Machine
         self.state_machine = state_machine or StateMachine(initial_state=LockerState.UNLOCKED)
@@ -113,6 +122,8 @@ class LockerController:
                 self.hook_manager._on_unlock_hotkey = _async_unlock
                 if hasattr(self.hook_manager, "event_filter"):
                     self.hook_manager.event_filter._on_unlock_hotkey = _async_unlock
+            if hasattr(self.hook_manager, "set_hotkeys"):
+                self.hook_manager.set_hotkeys(lock_hotkey=lock_hotkey, unlock_hotkey=unlock_hotkey)
         else:
             def _async_lock():
                 threading.Thread(target=self.lock, daemon=True, name="CtrlLockAsync").start()
@@ -124,6 +135,8 @@ class LockerController:
                 on_lock_hotkey=_async_lock,
                 on_unlock_hotkey=_async_unlock,
                 swallow_active=False,
+                lock_hotkey=lock_hotkey,
+                unlock_hotkey=unlock_hotkey,
             )
 
         # Telemetry & Latency tracking
@@ -281,6 +294,13 @@ class LockerController:
                     "Lock sequence completed in %.3f ms (Budget < 200 ms)",
                     latency_ms,
                 )
+                if self.audio_feedback:
+                    try:
+                        from input_locker.core.audio import play_lock_cue
+                        play_lock_cue()
+                    except Exception as exc:
+                        logger.debug("Audio lock cue trigger failed: %s", exc)
+
                 if self._on_state_change:
                     try:
                         self._on_state_change(True)
@@ -420,17 +440,36 @@ class LockerController:
                     "Unlock sequence completed in %.3f ms (Budget < 200 ms)",
                     latency_ms,
                 )
+                if self.audio_feedback:
+                    try:
+                        from input_locker.core.audio import play_unlock_cue
+                        play_unlock_cue()
+                    except Exception as exc:
+                        logger.debug("Audio unlock cue trigger failed: %s", exc)
+
                 if self._on_state_change:
                     try:
                         self._on_state_change(False)
                     except Exception:
                         pass
                 return True
-
             except Exception as exc:
                 logger.error("Failure during unlock sequence: %s. Forcing fail-safe release...", exc, exc_info=True)
                 self._safe_rollback()
                 return False
+
+    def set_hotkeys(
+        self,
+        lock_hotkey: Optional[str] = None,
+        unlock_hotkey: Optional[str] = None,
+    ) -> None:
+        """Dynamically update lock and/or unlock hotkeys at runtime."""
+        if lock_hotkey is not None:
+            self._lock_hotkey = lock_hotkey
+        if unlock_hotkey is not None:
+            self._unlock_hotkey = unlock_hotkey
+        if hasattr(self.hook_manager, "set_hotkeys"):
+            self.hook_manager.set_hotkeys(lock_hotkey=lock_hotkey, unlock_hotkey=unlock_hotkey)
 
     def _safe_rollback(self) -> None:
         """Emergency rollback ensuring user input is restored on sequence failure."""

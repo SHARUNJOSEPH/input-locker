@@ -28,10 +28,16 @@ VK_RCONTROL = 0xA3
 VK_LMENU = 0xA4  # Left Alt
 VK_RMENU = 0xA5  # Right Alt
 
+VK_LWIN = 0x5B
+VK_RWIN = 0x5C
+
 # Key code groupings for modifier checks
 CTRL_KEYS = {VK_CONTROL, VK_LCONTROL, VK_RCONTROL}
 ALT_KEYS = {VK_MENU, VK_LMENU, VK_RMENU}
 SHIFT_KEYS = {VK_SHIFT, VK_LSHIFT, VK_RSHIFT}
+WIN_KEYS = {VK_LWIN, VK_RWIN}
+
+from input_locker.hooks.hotkey import HotkeyBinding, parse_hotkey
 
 # Windows Message Identifiers
 WM_KEYDOWN = 0x0100
@@ -82,11 +88,16 @@ class EventFilter:
         on_lock_hotkey: Optional[Callable[[], None]] = None,
         on_unlock_hotkey: Optional[Callable[[], None]] = None,
         swallow_active: bool = False,
+        lock_hotkey: str = "F11",
+        unlock_hotkey: str = "Ctrl+Alt+Shift+U",
     ) -> None:
         self._on_lock_hotkey = on_lock_hotkey
         self._on_unlock_hotkey = on_unlock_hotkey
         self._swallow_active: bool = bool(swallow_active)
         self._password_mode: bool = False
+
+        self._lock_binding: HotkeyBinding = parse_hotkey(lock_hotkey)
+        self._unlock_binding: HotkeyBinding = parse_hotkey(unlock_hotkey)
 
         self._active_keys: Set[int] = set()
         self._pending_unlock_keyups: Set[int] = set()
@@ -98,6 +109,29 @@ class EventFilter:
         self.swallowed_mouse_count: int = 0
         self.total_keyboard_count: int = 0
         self.total_mouse_count: int = 0
+
+    @property
+    def lock_hotkey(self) -> str:
+        """Return the current lock hotkey string representation."""
+        return self._lock_binding.format()
+
+    @property
+    def unlock_hotkey(self) -> str:
+        """Return the current unlock hotkey string representation."""
+        return self._unlock_binding.format()
+
+    def set_hotkeys(
+        self,
+        lock_hotkey: Optional[str] = None,
+        unlock_hotkey: Optional[str] = None,
+    ) -> None:
+        """Dynamically rebind lock and/or unlock hotkeys at runtime."""
+        if lock_hotkey is not None:
+            self._lock_binding = parse_hotkey(lock_hotkey)
+            logger.info("EventFilter lock hotkey updated to: %s", self._lock_binding.format())
+        if unlock_hotkey is not None:
+            self._unlock_binding = parse_hotkey(unlock_hotkey)
+            logger.info("EventFilter unlock hotkey updated to: %s", self._unlock_binding.format())
 
     @property
     def swallow_active(self) -> bool:
@@ -242,37 +276,36 @@ class EventFilter:
                     self._pending_unlock_keyups.difference_update(SHIFT_KEYS)
                     is_pending_keyup = True
 
-        # 1. Hotkey Detection: Lock Hotkey F11
-        if vk == VK_F11 and is_down:
+        # 1. Hotkey Detection: Lock Hotkey (Dynamic binding)
+        if self._lock_binding.matches(vk, self._active_keys) and is_down:
             if self._on_lock_hotkey is not None:
                 try:
                     self._on_lock_hotkey()
                 except Exception as exc:
                     logger.error("Error executing on_lock_hotkey: %s", exc, exc_info=True)
 
-        # 2. Hotkey Detection: Unlock Combo Ctrl + Alt + Shift + U
+        # 2. Hotkey Detection: Unlock Combo (Dynamic binding)
         is_unlock_combo = False
-        if vk == VK_U and is_down:
-            # Strictly verify simultaneous presence in _active_keys without async OS polling
-            ctrl = bool(self._active_keys & CTRL_KEYS)
-            alt = bool(self._active_keys & ALT_KEYS)
-            shift = bool(self._active_keys & SHIFT_KEYS)
+        if self._unlock_binding.matches(vk, self._active_keys) and is_down:
+            is_unlock_combo = True
 
-            if ctrl and alt and shift:
-                is_unlock_combo = True
-
-                # Record currently held keys and all modifier variants for post-unlock swallowing
-                self._pending_unlock_keyups.update(self._active_keys)
-                self._pending_unlock_keyups.add(vk)
+            # Record currently held keys and all modifier variants for post-unlock swallowing
+            self._pending_unlock_keyups.update(self._active_keys)
+            self._pending_unlock_keyups.add(vk)
+            if self._unlock_binding.ctrl:
                 self._pending_unlock_keyups.update(CTRL_KEYS)
+            if self._unlock_binding.alt:
                 self._pending_unlock_keyups.update(ALT_KEYS)
+            if self._unlock_binding.shift:
                 self._pending_unlock_keyups.update(SHIFT_KEYS)
+            if self._unlock_binding.win:
+                self._pending_unlock_keyups.update(WIN_KEYS)
 
-                if self._on_unlock_hotkey is not None:
-                    try:
-                        self._on_unlock_hotkey()
-                    except Exception as exc:
-                        logger.error("Error executing on_unlock_hotkey: %s", exc, exc_info=True)
+            if self._on_unlock_hotkey is not None:
+                try:
+                    self._on_unlock_hotkey()
+                except Exception as exc:
+                    logger.error("Error executing on_unlock_hotkey: %s", exc, exc_info=True)
 
         # In password entry mode, suppress system task-switching shortcuts so background apps cannot be accessed
         is_task_switch = False
@@ -306,14 +339,18 @@ class EventFilter:
                 except Exception:
                     pass
 
-        # - F11 is always swallowed (even when unlocked) to protect staging media players
+        # - Lock trigger key is swallowed even when unlocked so it doesn't leak to background apps
         # - When locked (swallow_active is True), ALL keys are swallowed
         # - When in password_mode, task-switching combos (Alt+Tab, Win keys, etc.) are swallowed
-        # - When unlock combo 'U' is pressed, it must be swallowed so 'U' doesn't leak
+        # - When unlock combo is pressed, it must be swallowed so keys don't leak
         # - Subsequent keyups from the unlock combo are swallowed even if swallow_active is False
+        is_lock_swallow = (
+            (vk == self._lock_binding.vk and (not self._lock_binding.ctrl or bool(self._active_keys & CTRL_KEYS)))
+            or self._lock_binding.matches(vk, self._active_keys)
+        )
         should_swallow = (
             self._swallow_active
-            or (vk == VK_F11)
+            or is_lock_swallow
             or is_unlock_combo
             or is_pending_keyup
             or is_task_switch

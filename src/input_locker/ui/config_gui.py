@@ -14,6 +14,7 @@ from typing import Optional, Tuple
 
 from input_locker import __version__
 from input_locker.config import LockerConfig, get_assets_dir
+from input_locker.hooks.hotkey import parse_hotkey
 from input_locker.updater import check_for_updates_async
 
 logger = logging.getLogger(__name__)
@@ -694,28 +695,32 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         bg="#0E172A", fg="#38BDF8", font=("Segoe UI", 9, "bold"),
     ).pack(side="left")
 
-    tk.Label(
-        g_row, text="Ctrl + Alt + Shift + U",
+    unlock_guide_lbl = tk.Label(
+        g_row, text=getattr(cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U"),
         bg="#1E293B", fg="#F8FAFC", font=("Segoe UI", 9, "bold"),
         padx=7, pady=2, bd=1, relief="solid", highlightbackground="#0284C7",
-    ).pack(side="left", padx=(8, 14))
+    )
+    unlock_guide_lbl.pack(side="left", padx=(8, 14))
 
     tk.Label(
         g_row, text="🔒  HOW TO LOCK:",
         bg="#0E172A", fg="#94A3B8", font=("Segoe UI", 9, "bold"),
     ).pack(side="left")
 
-    tk.Label(
-        g_row, text="F11",
+    lock_guide_lbl = tk.Label(
+        g_row, text=getattr(cfg, "lock_hotkey", "F11"),
         bg="#1E293B", fg="#F8FAFC", font=("Segoe UI", 9, "bold"),
         padx=7, pady=2, bd=1, relief="solid",
-    ).pack(side="left", padx=(6, 0))
+    )
+    lock_guide_lbl.pack(side="left", padx=(6, 0))
 
-    tk.Label(
+    initial_unlock = getattr(cfg, "unlock_hotkey", "Ctrl + Alt + Shift + U")
+    guide_sub_lbl = tk.Label(
         guide_card,
-        text="Press Ctrl + Alt + Shift + U together at any time while locked to reveal password entry and unlock.",
+        text=f"Press {initial_unlock} together at any time while locked to reveal password entry and unlock.",
         bg="#0E172A", fg=TEXT_MUTED, font=("Segoe UI", 8),
-    ).pack(anchor="w", padx=8, pady=(1, 3))
+    )
+    guide_sub_lbl.pack(anchor="w", padx=8, pady=(1, 3))
 
     # ── Card 1: Wallpaper Section ─────────────────────────────────────────
     wp_card = tk.Frame(
@@ -848,13 +853,81 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     err_lbl = tk.Label(pw_card, text="", bg=CARD_BG, fg=DANGER_TEXT, font=("Segoe UI", 8))
     err_lbl.pack(anchor="w", padx=10, pady=(2, 0))
 
-    lbl(pw_card, "💡 Unlock instruction: Press Ctrl + Alt + Shift + U when locked → Enter Password → Press Enter.",
+    lbl(pw_card, "💡 Unlock instruction: Press unlock combo when locked → Enter Password → Press Enter.",
         subtle=True, size=8).pack(anchor="w", padx=10, pady=(2, 4))
 
+    # ── Card 3: Hotkeys & Audio Feedback Section ──────────────────────────
+    hk_card = tk.Frame(
+        root, bg=CARD_BG, bd=1, relief="solid",
+        highlightthickness=1, highlightbackground=CARD_BORDER,
+    )
+    hk_card.pack(fill="x", padx=20, pady=(0, 10), ipady=5, ipadx=6)
+
+    hk_hdr = tk.Frame(hk_card, bg=CARD_BG)
+    hk_hdr.pack(fill="x", padx=10, pady=(4, 4))
+    lbl(hk_hdr, "SHORTCUTS & AUDIO FEEDBACK", bold=True, size=8, subtle=True).pack(side="left")
+    lbl(hk_hdr, "Custom triggers & acoustic cues (FOH / Staging)", muted=True, size=8).pack(side="right")
+
+    # Lock hotkey row
+    hk_row1 = tk.Frame(hk_card, bg=CARD_BG)
+    hk_row1.pack(fill="x", padx=10, pady=(2, 3))
+    lbl(hk_row1, "Lock Trigger:", muted=True, size=9).pack(side="left", padx=(0, 8))
+
+    lock_hk_var = tk.StringVar(value=getattr(cfg, "lock_hotkey", "F11"))
+    lock_hk_entry = entry(hk_row1, textvariable=lock_hk_var, width=12)
+    lock_hk_entry.pack(side="left", ipady=2)
+
+    def set_lock_preset(p: str):
+        lock_hk_var.set(p)
+
+    for preset in ("F11", "F9", "F10", "F12", "Ctrl+F12"):
+        btn(hk_row1, preset, lambda p=preset: set_lock_preset(p)).pack(side="left", padx=2)
+
+    # Unlock hotkey row
+    hk_row2 = tk.Frame(hk_card, bg=CARD_BG)
+    hk_row2.pack(fill="x", padx=10, pady=(3, 3))
+    lbl(hk_row2, "Unlock Combo:", muted=True, size=9).pack(side="left", padx=(0, 6))
+
+    unlock_hk_var = tk.StringVar(value=getattr(cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U"))
+    unlock_hk_entry = entry(hk_row2, textvariable=unlock_hk_var, width=20)
+    unlock_hk_entry.pack(side="left", ipady=2)
+
+    def set_unlock_preset(p: str):
+        unlock_hk_var.set(p)
+
+    for preset in ("Ctrl+Alt+Shift+U", "Ctrl+Alt+Shift+L", "Ctrl+Alt+Shift+K"):
+        btn(hk_row2, preset.split("+")[-1], lambda p=preset: set_unlock_preset(p)).pack(side="left", padx=2)
+
+    def update_guide_badges(*_):
+        lk = lock_hk_var.get().strip() or "F11"
+        ulk = unlock_hk_var.get().strip() or "Ctrl+Alt+Shift+U"
+        lock_guide_lbl.config(text=lk)
+        unlock_guide_lbl.config(text=ulk)
+        guide_sub_lbl.config(text=f"Press {ulk} together at any time while locked to reveal password entry and unlock.")
+
+    lock_hk_var.trace_add("write", update_guide_badges)
+    unlock_hk_var.trace_add("write", update_guide_badges)
+
+    # Audio Feedback Row
+    audio_row = tk.Frame(hk_card, bg=CARD_BG)
+    audio_row.pack(fill="x", padx=10, pady=(5, 3))
+
+    audio_feedback_var = tk.BooleanVar(value=getattr(cfg, "audio_feedback", False))
+    audio_chk = tk.Checkbutton(
+        audio_row,
+        text="🔊 Play acoustic feedback chime on state transitions (lock / unlock)",
+        variable=audio_feedback_var,
+        bg=CARD_BG, fg=TEXT_PRIMARY, selectcolor=INPUT_BG,
+        activebackground=CARD_BG, activeforeground=TEXT_PRIMARY,
+        font=("Segoe UI", 9),
+    )
+    audio_chk.pack(anchor="w")
+    lbl(audio_row, "Provides audible confirmation in dark front-of-house (FOH) booths and remote staging racks.",
+        subtle=True, size=8).pack(anchor="w", padx=24, pady=(1, 2))
 
     # ── Preferences ───────────────────────────────────────────────────────
     opt_box = tk.Frame(root, bg=BG)
-    opt_box.pack(fill="x", padx=20, pady=(0, 12))
+    opt_box.pack(fill="x", padx=20, pady=(0, 10))
 
     check_updates_var = tk.BooleanVar(value=getattr(cfg, "check_updates", True))
     chk = tk.Checkbutton(
@@ -876,6 +949,20 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         if wp and not Path(wp).is_file():
             messagebox.showerror("Invalid Wallpaper", f"File not found:\n{wp}", parent=root)
             return False
+
+        lk = lock_hk_var.get().strip()
+        ulk = unlock_hk_var.get().strip()
+        try:
+            parse_hotkey(lk)
+        except Exception as exc:
+            messagebox.showerror("Invalid Lock Hotkey", f"Invalid lock hotkey '{lk}':\n{exc}", parent=root)
+            return False
+        try:
+            parse_hotkey(ulk)
+        except Exception as exc:
+            messagebox.showerror("Invalid Unlock Hotkey", f"Invalid unlock hotkey '{ulk}':\n{exc}", parent=root)
+            return False
+
         err_lbl.config(text="")
         return True
 
@@ -886,6 +973,9 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
             check_updates=check_updates_var.get(),
             update_repo=getattr(cfg, "update_repo", ""),
             first_run=getattr(cfg, "first_run", False),
+            audio_feedback=audio_feedback_var.get(),
+            lock_hotkey=lock_hk_var.get().strip(),
+            unlock_hotkey=unlock_hk_var.get().strip(),
         )
         if pw_cleared[0]:
             new_cfg.password = ""
@@ -931,8 +1021,21 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     btn_row.pack(fill="x", padx=20, pady=(0, 16))
 
     btn(btn_row, "Cancel", cancel).pack(side="left")
-    btn(btn_row, "Run in Background (F11 to Lock)", run_in_background).pack(side="left", padx=8)
+    initial_lk = getattr(cfg, 'lock_hotkey', 'F11')
+    run_bg_btn = btn(btn_row, f"Run in Background ({initial_lk} to Lock)", run_in_background)
+    run_bg_btn.pack(side="left", padx=8)
     btn(btn_row, "  🔒 Lock Screen Now  ", save_and_lock, primary=True).pack(side="right")
+
+    # Wire update to run_bg_btn
+    def _update_all_hotkey_labels(*_):
+        lk = lock_hk_var.get().strip() or "F11"
+        ulk = unlock_hk_var.get().strip() or "Ctrl+Alt+Shift+U"
+        lock_guide_lbl.config(text=lk)
+        unlock_guide_lbl.config(text=ulk)
+        guide_sub_lbl.config(text=f"Press {ulk} together at any time while locked to reveal password entry and unlock.")
+        run_bg_btn.config(text=f"Run in Background ({lk} to Lock)")
+
+    lock_hk_var.trace_add("write", _update_all_hotkey_labels)
 
     root.protocol("WM_DELETE_WINDOW", cancel)
 
@@ -945,7 +1048,7 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
 
     # ── Reveal Window ─────────────────────────────────────────────────────
     root.update_idletasks()
-    W, H = 610, 660
+    W, H = 610, 780
     sx = root.winfo_screenwidth()
     sy = root.winfo_screenheight()
     root.geometry(f"{W}x{H}+{(sx - W)//2}+{(sy - H)//2}")

@@ -69,6 +69,9 @@ class LockerConfig:
     check_updates: bool = True
     update_repo: str = ""
     first_run: bool = True
+    audio_feedback: bool = False
+    lock_hotkey: str = "F11"
+    unlock_hotkey: str = "Ctrl+Alt+Shift+U"
 
     @property
     def has_password(self) -> bool:
@@ -117,6 +120,9 @@ class LockerConfig:
                     check_updates=data.get("check_updates", True),
                     update_repo=data.get("update_repo", ""),
                     first_run=data.get("first_run", False),
+                    audio_feedback=data.get("audio_feedback", False),
+                    lock_hotkey=data.get("lock_hotkey", "F11"),
+                    unlock_hotkey=data.get("unlock_hotkey", "Ctrl+Alt+Shift+U"),
                 )
                 # If the legacy config contained a plaintext password, immediately resave with hash-only
                 if pw:

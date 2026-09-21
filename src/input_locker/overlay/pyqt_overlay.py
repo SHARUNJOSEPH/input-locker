@@ -337,6 +337,16 @@ class PyQtOverlay:
     def get_geometry(self) -> Tuple[int, int, int, int]:
         """Returns the bounding box encompassing all screens as (x, y, width, height)."""
         if not self._widgets:
+            try:
+                user32 = ctypes.windll.user32
+                vx = int(user32.GetSystemMetrics(76))  # SM_XVIRTUALSCREEN
+                vy = int(user32.GetSystemMetrics(77))  # SM_YVIRTUALSCREEN
+                vw = int(user32.GetSystemMetrics(78))  # SM_CXVIRTUALSCREEN
+                vh = int(user32.GetSystemMetrics(79))  # SM_CYVIRTUALSCREEN
+                if vw > 0 and vh > 0:
+                    return (vx, vy, vw, vh)
+            except Exception:
+                pass
             return (0, 0, 1920, 1080)
 
         min_x = min(w.x() for w in self._widgets)
