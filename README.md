@@ -1,4 +1,4 @@
-﻿# Windows AV Staging Input Locker
+# Windows AV Staging Input Locker
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://microsoft.com/windows)
@@ -23,7 +23,7 @@
     <img src="https://img.shields.io/badge/🚀%20Roadmap-Releases%20%26%20Backlog-4F46E5?style=for-the-badge&logo=github&logoColor=white" alt="Roadmap & Releases" />
   </a>
   <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
-    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.1.0-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
+    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.1-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
   </a>
 </p>
 
@@ -46,12 +46,6 @@ A high-performance, zero-latency background utility engineered for Windows live 
 ## 📥 Installation & Download Packages
 
 Choose your preferred download package. **No Python or external runtimes are required!**
-
-<p align="center">
-  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
-    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.1-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
-  </a>
-</p>
 
 ## 📥 Direct Downloads
 
