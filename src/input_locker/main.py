@@ -154,8 +154,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     from input_locker.config import LockerConfig
     locker_cfg = LockerConfig.load()
 
-    # Show settings GUI on first run (no config file) or when --configure is passed
-    if args.configure or not LockerConfig.exists():
+    # Always show the Settings GUI on startup so the user sees the Lock button.
+    # Skip only when --no-lock is passed from an automated/daemon context, or --daemon.
+    skip_gui = args.daemon
+    if not skip_gui:
         try:
             from input_locker.ui.config_gui import show_config_dialog
             cfg, should_launch = show_config_dialog(config=locker_cfg)

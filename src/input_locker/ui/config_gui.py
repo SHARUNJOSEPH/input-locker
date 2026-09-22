@@ -13,7 +13,7 @@ from tkinter import filedialog, messagebox
 from typing import Optional, Tuple
 
 from input_locker import __version__
-from input_locker.config import LockerConfig, get_assets_dir
+from input_locker.config import LockerConfig, get_assets_dir, get_config_path
 from input_locker.hooks.hotkey import parse_hotkey
 from input_locker.updater import check_for_updates_async
 
@@ -54,6 +54,9 @@ BANNER_BD      = "#3B82F6"   # Update banner border
 
 CREATOR_LINKEDIN = "https://www.linkedin.com/in/joseph-sharun/"
 CREATOR_GITHUB   = "https://github.com/SHARUNJOSEPH"
+APP_GITHUB       = "https://github.com/SHARUNJOSEPH/input-locker"
+APP_RELEASES     = "https://github.com/SHARUNJOSEPH/input-locker/releases"
+APP_ISSUES       = "https://github.com/SHARUNJOSEPH/input-locker/issues"
 
 
 def _make_avatar_image(size: int = 44, master: Optional[tk.Misc] = None) -> "Optional[tk.PhotoImage]":
@@ -145,68 +148,124 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
         except Exception:
             pass
 
-    content = tk.Frame(top, bg=BG)
-    content.pack(fill="both", expand=True, padx=26, pady=22)
+    # Scrollable content frame
+    outer = tk.Frame(top, bg=BG)
+    outer.pack(fill="both", expand=True)
+
+    canvas_scroll = tk.Canvas(outer, bg=BG, bd=0, highlightthickness=0)
+    scrollbar = tk.Scrollbar(outer, orient="vertical", command=canvas_scroll.yview)
+    canvas_scroll.configure(yscrollcommand=scrollbar.set)
+
+    scrollbar.pack(side="right", fill="y")
+    canvas_scroll.pack(side="left", fill="both", expand=True)
+
+    content = tk.Frame(canvas_scroll, bg=BG)
+    content_window = canvas_scroll.create_window((0, 0), window=content, anchor="nw")
+
+    def _on_content_configure(e):
+        canvas_scroll.configure(scrollregion=canvas_scroll.bbox("all"))
+        canvas_scroll.itemconfig(content_window, width=canvas_scroll.winfo_width())
+
+    def _on_canvas_configure(e):
+        canvas_scroll.itemconfig(content_window, width=e.width)
+
+    content.bind("<Configure>", _on_content_configure)
+    canvas_scroll.bind("<Configure>", _on_canvas_configure)
+
+    def _on_mousewheel(e):
+        canvas_scroll.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+    canvas_scroll.bind_all("<MouseWheel>", _on_mousewheel)
+    top.bind("<Destroy>", lambda e: canvas_scroll.unbind_all("<MouseWheel>"))
+
+    # Padding frame
+    pad = tk.Frame(content, bg=BG)
+    pad.pack(fill="both", expand=True, padx=26, pady=22)
 
     # ── Top App Identity ──────────────────────────────────────────────────
     if logo_path.is_file():
         try:
             from PIL import Image, ImageTk
-            lim = Image.open(str(logo_path)).convert("RGBA").resize((48, 48), Image.LANCZOS)
+            lim = Image.open(str(logo_path)).convert("RGBA").resize((56, 56), Image.LANCZOS)
             lph = ImageTk.PhotoImage(lim, master=top)
             _refs.append(lph)
-            tk.Label(content, image=lph, bg=BG).pack(pady=(0, 6))
+            tk.Label(pad, image=lph, bg=BG).pack(pady=(0, 6))
         except Exception:
-            tk.Label(content, text="🔒", font=("Segoe UI Emoji", 32), bg=BG, fg=TEXT_PRIMARY).pack(pady=(0, 6))
+            tk.Label(pad, text="🔒", font=("Segoe UI Emoji", 36), bg=BG, fg=TEXT_PRIMARY).pack(pady=(0, 6))
     else:
-        tk.Label(content, text="🔒", font=("Segoe UI Emoji", 32), bg=BG, fg=TEXT_PRIMARY).pack(pady=(0, 6))
+        tk.Label(pad, text="🔒", font=("Segoe UI Emoji", 36), bg=BG, fg=TEXT_PRIMARY).pack(pady=(0, 6))
 
     tk.Label(
-        content, text="Input Locker",
+        pad, text="Input Locker",
         bg=BG, fg=TEXT_PRIMARY,
-        font=("Segoe UI", 18, "bold"),
+        font=("Segoe UI", 20, "bold"),
     ).pack(pady=(0, 4))
 
-    # Badges row: v0.1.0 Production | Open Source | MIT License
-    badge_row = tk.Frame(content, bg=BG)
+    tk.Label(
+        pad, text="Windows AV Staging Input Lock Utility",
+        bg=BG, fg=TEXT_MUTED, font=("Segoe UI", 10),
+    ).pack(pady=(0, 8))
+
+    # Badges row
+    badge_row = tk.Frame(pad, bg=BG)
     badge_row.pack(pady=(0, 10))
 
-    tk.Label(
-        badge_row, text=f"v{__version__} Production",
-        bg="#1E1B4B", fg="#818CF8", font=("Segoe UI", 8, "bold"),
-        padx=8, pady=3, bd=1, relief="solid",
-    ).pack(side="left", padx=4)
-
-    tk.Label(
-        badge_row, text="Open Source",
-        bg=SUCCESS_BG, fg=SUCCESS_TEXT, font=("Segoe UI", 8, "bold"),
-        padx=8, pady=3, bd=1, relief="solid",
-    ).pack(side="left", padx=4)
-
-    tk.Label(
-        badge_row, text="MIT License",
-        bg="#0C4A6E", fg="#38BDF8", font=("Segoe UI", 8, "bold"),
-        padx=8, pady=3, bd=1, relief="solid",
-    ).pack(side="left", padx=4)
+    for text, bg_c, fg_c in [
+        (f"v{__version__}  Production", "#1E1B4B", "#818CF8"),
+        ("Open Source",               SUCCESS_BG, SUCCESS_TEXT),
+        ("MIT License",               "#0C4A6E",  "#38BDF8"),
+        ("Windows 10/11",             "#1C3553",  "#93C5FD"),
+    ]:
+        tk.Label(
+            badge_row, text=text,
+            bg=bg_c, fg=fg_c, font=("Segoe UI", 8, "bold"),
+            padx=8, pady=3, bd=1, relief="solid",
+        ).pack(side="left", padx=3)
 
     # Description
     desc_txt = (
-        "A high-performance Windows staging & live AV lock screen environment "
+        "A high-performance Windows staging & live AV lock screen utility "
         "engineered to intercept keyboard and mouse input while keeping background "
-        "rendering engines running safely."
+        "rendering engines (Resolume, Watchout, DAWs) running safely."
     )
     tk.Label(
-        content, text=desc_txt,
+        pad, text=desc_txt,
         bg=BG, fg=TEXT_MUTED, font=("Segoe UI", 9),
-        wraplength=420, justify="center",
+        wraplength=430, justify="center",
     ).pack(pady=(0, 16))
+
+    # ── App Repository Links ──────────────────────────────────────────────
+    repo_card = tk.Frame(
+        pad, bg=CARD_BG, bd=1, relief="solid",
+        highlightthickness=1, highlightbackground=CARD_BORDER,
+    )
+    repo_card.pack(fill="x", pady=(0, 12), ipady=6, ipadx=10)
+
+    tk.Label(
+        repo_card, text="PROJECT REPOSITORY",
+        bg=CARD_BG, fg=CARD_HEADER, font=("Segoe UI", 8, "bold"),
+    ).pack(anchor="w", padx=12, pady=(6, 6))
+
+    repo_btn_row = tk.Frame(repo_card, bg=CARD_BG)
+    repo_btn_row.pack(fill="x", padx=12, pady=(0, 8))
+
+    def _link_btn(parent, text, url, bg_col="#21262D", fg_col="#FFFFFF", ab_col="#30363D"):
+        return tk.Button(
+            parent, text=text, command=lambda: webbrowser.open(url),
+            bg=bg_col, fg=fg_col, activebackground=ab_col, activeforeground="#FFFFFF",
+            relief="flat", bd=1, padx=10, pady=5, font=("Segoe UI", 9, "bold"), cursor="hand2",
+        )
+
+    _link_btn(repo_btn_row, "⭐  GitHub Repo",    APP_GITHUB,   "#21262D", "#FFFFFF", "#30363D").pack(side="left", padx=(0, 6))
+    _link_btn(repo_btn_row, "📦  Releases",       APP_RELEASES, "#0C4A6E", "#BAE6FD", "#075985").pack(side="left", padx=(0, 6))
+    _link_btn(repo_btn_row, "🐛  Report an Issue",APP_ISSUES,   DANGER_BG, DANGER_TEXT, DANGER_HOVER).pack(side="left")
 
     # ── Created & Maintained By Card ──────────────────────────────────────
     creator_card = tk.Frame(
-        content, bg=CARD_BG, bd=1, relief="solid",
+        pad, bg=CARD_BG, bd=1, relief="solid",
         highlightthickness=1, highlightbackground=CARD_BORDER,
     )
-    creator_card.pack(fill="x", pady=(0, 14), ipady=8, ipadx=10)
+    creator_card.pack(fill="x", pady=(0, 12), ipady=8, ipadx=10)
 
     tk.Label(
         creator_card, text="CREATED & MAINTAINED BY",
@@ -214,9 +273,8 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     ).pack(anchor="w", padx=12, pady=(6, 8))
 
     cr_row = tk.Frame(creator_card, bg=CARD_BG)
-    cr_row.pack(fill="x", padx=12, pady=(0, 4))
+    cr_row.pack(fill="x", padx=12, pady=(0, 6))
 
-    # Avatar
     av_ph = _make_avatar_image(44, master=top)
     if av_ph:
         _refs.append(av_ph)
@@ -225,56 +283,36 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
         tk.Label(cr_row, text="JS", bg="#6366F1", fg="#FFFFFF", font=("Segoe UI", 12, "bold"),
                  width=3, height=1, relief="flat").pack(side="left", padx=(0, 10))
 
-    # Details
     det_f = tk.Frame(cr_row, bg=CARD_BG)
     det_f.pack(side="left", fill="both", expand=True)
     tk.Label(det_f, text="Joseph Sharun", bg=CARD_BG, fg=TEXT_PRIMARY,
              font=("Segoe UI", 12, "bold")).pack(anchor="w")
     tk.Label(det_f, text="Software Engineer & AV Tech Creator", bg=CARD_BG, fg=TEXT_MUTED,
              font=("Segoe UI", 9)).pack(anchor="w", pady=(1, 0))
+    tk.Label(det_f, text="Chennai, India  🇮🇳", bg=CARD_BG, fg=TEXT_SUBTLE,
+             font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 0))
 
-    # Action Links
     btn_links = tk.Frame(cr_row, bg=CARD_BG)
     btn_links.pack(side="right", padx=(8, 0))
+    _link_btn(btn_links, "🔗 LinkedIn", CREATOR_LINKEDIN, "#0A66C2", "#FFFFFF", "#084E96").pack(side="left", padx=3)
+    _link_btn(btn_links, "🐙 GitHub",  CREATOR_GITHUB,   "#21262D", "#FFFFFF", "#30363D").pack(side="left", padx=3)
 
-    def _open_li():
-        webbrowser.open(CREATOR_LINKEDIN)
-
-    def _open_gh():
-        webbrowser.open(CREATOR_GITHUB)
-
-    btn_li = tk.Button(
-        btn_links, text="🔗 LinkedIn", command=_open_li,
-        bg="#0A66C2", fg="#FFFFFF", activebackground="#084E96", activeforeground="#FFFFFF",
-        relief="flat", bd=0, padx=9, pady=4, font=("Segoe UI", 9, "bold"), cursor="hand2",
-    )
-    btn_li.pack(side="left", padx=3)
-
-    btn_gh = tk.Button(
-        btn_links, text="🐙 GitHub", command=_open_gh,
-        bg="#21262D", fg="#FFFFFF", activebackground="#30363D", activeforeground="#FFFFFF",
-        relief="flat", bd=1, padx=9, pady=4, font=("Segoe UI", 9, "bold"), cursor="hand2",
-    )
-    btn_gh.pack(side="left", padx=3)
-
-    # ── Software Version & Updates Row ────────────────────────────────────
+    # ── Version & Updates Row ─────────────────────────────────────────────
     up_card = tk.Frame(
-        content, bg=CARD_BG, bd=1, relief="solid",
+        pad, bg=CARD_BG, bd=1, relief="solid",
         highlightthickness=1, highlightbackground=CARD_BORDER,
     )
-    up_card.pack(fill="x", pady=(0, 14), ipady=8, ipadx=10)
+    up_card.pack(fill="x", pady=(0, 12), ipady=8, ipadx=10)
 
     up_row = tk.Frame(up_card, bg=CARD_BG)
     up_row.pack(fill="x", padx=12)
 
     up_info = tk.Frame(up_row, bg=CARD_BG)
     up_info.pack(side="left", fill="both", expand=True)
-
     tk.Label(
         up_info, text="🔄  Software Version & Updates",
         bg=CARD_BG, fg=TEXT_PRIMARY, font=("Segoe UI", 10, "bold"),
     ).pack(anchor="w")
-
     up_sub = tk.Label(
         up_info, text=f"Current build: v{__version__} (Production)",
         bg=CARD_BG, fg=TEXT_MUTED, font=("Segoe UI", 9),
@@ -287,20 +325,16 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
             def _ui():
                 up_btn.config(text="Check for Updates", state="normal")
                 if info and info.get("available"):
-                    up_sub.config(text=f"Newer build available: {info.get('latest_version')}!", fg="#38BDF8")
+                    up_sub.config(text=f"Newer build: {info.get('latest_version')} available!", fg="#38BDF8")
                     if messagebox.askyesno(
                         "Update Available",
                         f"Input Locker {info.get('latest_version')} is available.\n\nOpen release download page?",
                         parent=top,
                     ):
-                        webbrowser.open(info.get("release_url", "https://github.com/input-locker/input-locker/releases/latest"))
+                        webbrowser.open(info.get("release_url", APP_RELEASES))
                 else:
-                    up_sub.config(text=f"Current build: v{__version__} (Latest)", fg=SUCCESS_TEXT)
-                    messagebox.showinfo(
-                        "Up to Date",
-                        f"Input Locker v{__version__} is the latest version.",
-                        parent=top,
-                    )
+                    up_sub.config(text=f"v{__version__} — You are on the latest version ✓", fg=SUCCESS_TEXT)
+                    messagebox.showinfo("Up to Date", f"Input Locker v{__version__} is the latest version.", parent=top)
             if top.winfo_exists():
                 top.after(0, _ui)
         check_for_updates_async(callback=_cb)
@@ -312,23 +346,83 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     )
     up_btn.pack(side="right")
 
+    # ── What's New / Changelog ────────────────────────────────────────────
+    cl_card = tk.Frame(
+        pad, bg=CARD_BG, bd=1, relief="solid",
+        highlightthickness=1, highlightbackground=CARD_BORDER,
+    )
+    cl_card.pack(fill="x", pady=(0, 12), ipady=6, ipadx=10)
+
+    tk.Label(
+        cl_card, text="WHAT'S NEW",
+        bg=CARD_BG, fg=CARD_HEADER, font=("Segoe UI", 8, "bold"),
+    ).pack(anchor="w", padx=12, pady=(6, 4))
+
+    for icon, headline in [
+        ("🎵", "v0.2.0 — Audio Feedback Cues on lock & unlock transitions"),
+        ("⌨️", "v0.2.0 — Customizable Lock & Unlock Hotkeys in Settings"),
+        ("🖥️", "v0.2.0 — Multi-Monitor virtual screen coverage fix"),
+        ("🛡️", "v0.1.0 — Windows Key blocker during locked state"),
+        ("🌐", "v0.1.0 — Network Show Control (OSC UDP / JSON TCP)"),
+        ("📦", "v0.1.0 — Published on Microsoft Store & winget"),
+    ]:
+        cl_row = tk.Frame(cl_card, bg=CARD_BG)
+        cl_row.pack(fill="x", padx=12, pady=2)
+        tk.Label(cl_row, text=icon, font=("Segoe UI Emoji", 10), bg=CARD_BG).pack(side="left", padx=(0, 8))
+        tk.Label(cl_row, text=headline, bg=CARD_BG, fg=TEXT_MUTED, font=("Segoe UI", 9), anchor="w").pack(side="left")
+
+    tk.Button(
+        cl_card, text="View Full Changelog on GitHub →",
+        command=lambda: webbrowser.open(APP_RELEASES),
+        bg=CARD_BG, fg="#38BDF8", activebackground=CARD_BG, activeforeground="#7DD3FC",
+        relief="flat", bd=0, font=("Segoe UI", 8, "bold"), cursor="hand2",
+    ).pack(anchor="w", padx=12, pady=(6, 8))
+
+    # ── System Information ────────────────────────────────────────────────
+    import sys as _sys, platform as _platform
+    try:
+        _cfg_path = str(get_config_path())
+    except Exception:
+        _cfg_path = "N/A"
+
+    sys_card = tk.Frame(
+        pad, bg=CARD_BG, bd=1, relief="solid",
+        highlightthickness=1, highlightbackground=CARD_BORDER,
+    )
+    sys_card.pack(fill="x", pady=(0, 12), ipady=6, ipadx=10)
+
+    tk.Label(
+        sys_card, text="SYSTEM INFORMATION",
+        bg=CARD_BG, fg=CARD_HEADER, font=("Segoe UI", 8, "bold"),
+    ).pack(anchor="w", padx=12, pady=(6, 4))
+
+    for label, value in [
+        ("App Version",  f"v{__version__}"),
+        ("Python",       f"{_sys.version.split()[0]}  ({_sys.implementation.name})"),
+        ("Platform",     _platform.platform(terse=True)),
+        ("Architecture", _platform.machine()),
+        ("Config File",  _cfg_path),
+    ]:
+        si_row = tk.Frame(sys_card, bg=CARD_BG)
+        si_row.pack(fill="x", padx=12, pady=1)
+        tk.Label(si_row, text=label, bg=CARD_BG, fg=TEXT_MUTED, font=("Segoe UI", 9), width=14, anchor="w").pack(side="left")
+        tk.Label(si_row, text=value, bg=CARD_BG, fg=TEXT_PRIMARY, font=("Segoe UI", 9), anchor="w").pack(side="left", fill="x")
+
     # ── Open Source Notice ────────────────────────────────────────────────
     tk.Label(
-        content,
-        text="💡 Open Source Initiative: Built to be open-sourced for the community.\nFeedback, feature requests, and contributions are warmly welcomed!",
+        pad,
+        text="💡 Built open-source for the AV & live production community.\nFeedback, feature requests, and pull requests are warmly welcomed!",
         bg=BG, fg=TEXT_SUBTLE, font=("Segoe UI", 8),
         justify="center",
-    ).pack(pady=(0, 14))
+    ).pack(pady=(2, 10))
 
     # ── Footer ────────────────────────────────────────────────────────────
-    ft_row = tk.Frame(content, bg=BG)
+    ft_row = tk.Frame(pad, bg=BG)
     ft_row.pack(fill="x")
-
     tk.Label(
         ft_row, text="© 2026 Joseph Sharun • MIT License",
         bg=BG, fg=TEXT_SUBTLE, font=("Segoe UI", 8),
     ).pack(side="left")
-
     tk.Button(
         ft_row, text="Close", command=top.destroy,
         bg=BTN_SEC_BG, fg=TEXT_PRIMARY, activebackground=BTN_SEC_HOVER, activeforeground=TEXT_PRIMARY,
@@ -336,7 +430,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     ).pack(side="right")
 
     top.update_idletasks()
-    w, h = 490, 560
+    w, h = 510, 680
     if parent:
         x = parent.winfo_x() + (parent.winfo_width() - w) // 2
         y = parent.winfo_y() + (parent.winfo_height() - h) // 2

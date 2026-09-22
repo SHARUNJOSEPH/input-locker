@@ -31,6 +31,11 @@ def get_assets_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "assets"
 
 
+def get_config_path() -> Path:
+    """Return the path to the active JSON config file."""
+    return _CONFIG_PATH
+
+
 def hash_password(plaintext: str, salt: Optional[str] = None) -> tuple[str, str]:
     """Hashes a password with PBKDF2-HMAC-SHA256 using a secure random salt.
 
