@@ -31,7 +31,7 @@ Write-Host "InputLocker.exe built successfully ($([math]::Round($exeSize, 2)) MB
 
 # 3. Create Zip Package
 Write-Host "`n[3/4] Creating distribution zip archive..." -ForegroundColor Yellow
-$zipPath = "dist\InputLocker-v0.2.0-Windows-x64.zip"
+$zipPath = "dist\InputLocker-v0.2.1-Windows-x64.zip"
 Compress-Archive -Path dist\InputLocker.exe, README.md, LICENSE, SECURITY.md -DestinationPath $zipPath -Force
 $zipSize = (Get-Item $zipPath).Length / 1MB
 Write-Host "Release archive created: $zipPath ($([math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
@@ -42,7 +42,7 @@ $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if (Test-Path $iscc) {
     Write-Host "Compiling setup installer with Inno Setup..." -ForegroundColor Cyan
     & $iscc "installer\input_locker_setup.iss"
-    Write-Host "Installer compiled at dist\InputLocker-Setup-v0.2.0.exe" -ForegroundColor Green
+    Write-Host "Installer compiled at dist\InputLocker-Setup-v0.2.1.exe" -ForegroundColor Green
 } else {
     Write-Host "Inno Setup not detected at default path (Optional - standalone .exe and .zip ready)." -ForegroundColor DarkGray
 }
