@@ -127,7 +127,7 @@ class TrayIcon:
             pystray.Menu.SEPARATOR,
         ]
         if self._on_settings:
-            items.append(pystray.MenuItem(t("tray_menu_settings"), self._menu_settings))
+            items.append(pystray.MenuItem(t("tray_menu_settings"), self._menu_settings, default=True))
         if self._on_about:
             items.append(pystray.MenuItem(t("tray_menu_about"), self._menu_about))
         items.extend([

@@ -1,8 +1,8 @@
-﻿; Inno Setup Script for Input Locker
+; Inno Setup Script for Input Locker
 ; Generates a clean Windows Installer (.exe) with desktop and start menu shortcuts
 
 #define MyAppName "Input Locker"
-#define MyAppVersion "0.2.3"
+#define MyAppVersion "0.2.4"
 #define MyAppPublisher "Joseph Sharun"
 #define MyAppURL "https://github.com/SHARUNJOSEPH/input-locker"
 #define MyAppExeName "InputLocker.exe"

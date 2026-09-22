@@ -11,6 +11,8 @@ import logging
 import threading
 from typing import Callable, Optional
 
+from ctypes import wintypes
+
 logger = logging.getLogger(__name__)
 
 MUTEX_NAME = "Local\\InputLocker_SingleInstance_Mutex_2026"
@@ -19,6 +21,25 @@ ERROR_ALREADY_EXISTS = 183
 SW_RESTORE = 9
 EVENT_MODIFY_STATE = 0x0002
 WAIT_OBJECT_0 = 0
+
+_kernel32 = ctypes.windll.kernel32
+_kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+_kernel32.CreateMutexW.restype = wintypes.HANDLE
+
+_kernel32.CreateEventW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR]
+_kernel32.CreateEventW.restype = wintypes.HANDLE
+
+_kernel32.OpenEventW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+_kernel32.OpenEventW.restype = wintypes.HANDLE
+
+_kernel32.SetEvent.argtypes = [wintypes.HANDLE]
+_kernel32.SetEvent.restype = wintypes.BOOL
+
+_kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+_kernel32.WaitForSingleObject.restype = wintypes.DWORD
+
+_kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+_kernel32.CloseHandle.restype = wintypes.BOOL
 
 
 def _bring_to_front(hwnd) -> bool:
@@ -60,7 +81,7 @@ def focus_existing_window() -> bool:
             pass
 
         # Direct title lookups
-        for title in ("Input Locker — Settings", "Input Locker - Settings", "Input Locker"):
+        for title in ("Input Locker — Settings", "Input Locker - Settings"):
             hwnd = user32.FindWindowW(None, title)
             if hwnd:
                 return _bring_to_front(hwnd)
@@ -114,17 +135,16 @@ class SingleInstanceManager:
             False if another instance is already running.
         """
         try:
-            kernel32 = ctypes.windll.kernel32
-            handle = kernel32.CreateMutexW(None, False, self.mutex_name)
-            last_err = kernel32.GetLastError()
+            handle = _kernel32.CreateMutexW(None, False, self.mutex_name)
+            last_err = _kernel32.GetLastError()
             if last_err == ERROR_ALREADY_EXISTS:
                 if handle:
-                    kernel32.CloseHandle(handle)
+                    _kernel32.CloseHandle(handle)
                 return False
 
             self._mutex_handle = handle
             # Also create the named event for IPC communication from secondary instances
-            self._event_handle = kernel32.CreateEventW(None, False, False, self.event_name)
+            self._event_handle = _kernel32.CreateEventW(None, False, False, self.event_name)
             return True
         except Exception as exc:
             logger.warning("Single-instance check encountered error: %s; allowing launch.", exc)
@@ -134,11 +154,13 @@ class SingleInstanceManager:
         """Brings existing window to front and signals running instance."""
         # 1. Signal the named event so the running background process can open settings
         try:
-            kernel32 = ctypes.windll.kernel32
-            h_event = kernel32.OpenEventW(EVENT_MODIFY_STATE, False, self.event_name)
+            h_event = _kernel32.OpenEventW(EVENT_MODIFY_STATE, False, self.event_name)
             if h_event:
-                kernel32.SetEvent(h_event)
-                kernel32.CloseHandle(h_event)
+                ok = _kernel32.SetEvent(h_event)
+                logger.info("SetEvent returned %s on event handle %s", ok, h_event)
+                _kernel32.CloseHandle(h_event)
+            else:
+                logger.warning("OpenEventW failed for %s: %s", self.event_name, ctypes.GetLastError())
         except Exception as exc:
             logger.debug("Could not signal existing instance event: %s", exc)
 
@@ -148,13 +170,14 @@ class SingleInstanceManager:
     def start_listener(self, on_request_callback: Callable[[], None], shutdown_event: threading.Event) -> None:
         """Starts a background thread listening for requests from secondary launches."""
         if not self._event_handle:
+            logger.warning("No event handle for single instance listener!")
             return
 
         def _listen():
-            kernel32 = ctypes.windll.kernel32
             while not shutdown_event.is_set():
-                res = kernel32.WaitForSingleObject(self._event_handle, 500)
+                res = _kernel32.WaitForSingleObject(self._event_handle, 500)
                 if res == WAIT_OBJECT_0:
+                    logger.info("SingleInstanceListener detected signal from secondary instance!")
                     try:
                         on_request_callback()
                     except Exception as exc:
@@ -166,17 +189,16 @@ class SingleInstanceManager:
 
     def release(self) -> None:
         """Releases Win32 handles."""
-        kernel32 = ctypes.windll.kernel32
         if self._event_handle:
             try:
-                kernel32.CloseHandle(self._event_handle)
+                _kernel32.CloseHandle(self._event_handle)
             except Exception:
                 pass
             self._event_handle = None
 
         if self._mutex_handle:
             try:
-                kernel32.CloseHandle(self._mutex_handle)
+                _kernel32.CloseHandle(self._mutex_handle)
             except Exception:
                 pass
             self._mutex_handle = None

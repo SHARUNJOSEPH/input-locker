@@ -605,11 +605,17 @@ def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish
     top.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
 
 
-def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
+def show_config_dialog(
+    config=None,
+    on_save=None,
+    on_lock=None,
+    on_hide=None,
+    standalone: bool = True,
+) -> Any:
     """Show the Apple-inspired settings dialog.
 
-    Returns:
-        (LockerConfig | None, should_launch: bool)
+    In standalone mode (default), runs modally and returns (config, should_launch).
+    In companion mode (standalone=False), returns a SettingsController with show/hide/request_show.
     """
     cfg = config or LockerConfig()
 
@@ -1300,6 +1306,66 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
             new_cfg.password_salt = cfg.password_salt
         return new_cfg
 
+    def _force_restore_mouse(event=None):
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            user32.ClipCursor(None)
+            while user32.ShowCursor(True) < 0:
+                pass
+            IDC_ARROW = 32512
+            h_cur = user32.LoadCursorW(None, IDC_ARROW)
+            if h_cur:
+                user32.SetCursor(h_cur)
+        except Exception:
+            pass
+
+    def show_window():
+        try:
+            logger.info("show_window called! root.winfo_exists=%s", root.winfo_exists())
+            if root.winfo_exists():
+                _force_restore_mouse()
+                root.config(cursor="arrow")
+                root.deiconify()
+                root.state("normal")
+                root.lift()
+                root.attributes("-topmost", True)
+                root.after(150, lambda: root.attributes("-topmost", False) if root.winfo_exists() else None)
+                root.focus_force()
+                root.after(50, _force_restore_mouse)
+                logger.info("show_window completed: deiconify & focus applied.")
+        except Exception as exc:
+            logger.warning("Error in show_window: %s", exc)
+
+    def hide_window():
+        try:
+            if root.winfo_exists():
+                root.withdraw()
+        except Exception:
+            pass
+
+    def request_show():
+        try:
+            logger.info("request_show called! root.winfo_exists=%s", root.winfo_exists())
+            if root.winfo_exists():
+                root.after(0, show_window)
+        except Exception as exc:
+            logger.warning("Error in request_show: %s", exc)
+
+    def request_hide():
+        try:
+            if root.winfo_exists():
+                root.after(0, hide_window)
+        except Exception:
+            pass
+
+    def destroy_window():
+        try:
+            if root.winfo_exists():
+                root.destroy()
+        except Exception:
+            pass
+
     def save_and_lock():
         if not validate():
             return
@@ -1307,7 +1373,12 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         new_cfg.save()
         result["config"] = new_cfg
         result["launch"] = True
-        root.destroy()
+        if standalone:
+            root.destroy()
+        else:
+            hide_window()
+            if on_lock:
+                on_lock(new_cfg)
 
     def run_in_background():
         if not validate():
@@ -1316,15 +1387,27 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         new_cfg.save()
         result["config"] = new_cfg
         result["launch"] = True
-        root.destroy()
+        if standalone:
+            root.destroy()
+        else:
+            hide_window()
+            if on_save:
+                on_save(new_cfg)
+            if on_hide:
+                on_hide()
 
     def cancel():
-        try:
-            current_cfg = build_config(lock_on_launch=cfg.lock_on_launch)
-            current_cfg.save()
-        except Exception:
-            pass
-        root.destroy()
+        if standalone:
+            try:
+                current_cfg = build_config(lock_on_launch=cfg.lock_on_launch)
+                current_cfg.save()
+            except Exception:
+                pass
+            root.destroy()
+        else:
+            hide_window()
+            if on_hide:
+                on_hide()
 
     root.protocol("WM_DELETE_WINDOW", cancel)
 
@@ -1336,6 +1419,10 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         )
 
     # ── Reveal Window ─────────────────────────────────────────────────────
+    _force_restore_mouse()
+    root.config(cursor="arrow")
+    root.bind("<Enter>", _force_restore_mouse, add="+")
+    root.bind("<FocusIn>", _force_restore_mouse, add="+")
     root.update_idletasks()
     W = 620
     sx = root.winfo_screenwidth()
@@ -1348,6 +1435,7 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     root.attributes("-topmost", True)
     root.after(200, lambda: root.attributes("-topmost", False) if root.winfo_exists() else None)
     root.focus_force()
+    root.after(50, _force_restore_mouse)
 
     # ── Auto-show tutorial for first-run users ────────────────────────────
     if getattr(cfg, "first_run", True):
@@ -1359,5 +1447,19 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
                 pass
         root.after(250, lambda: show_tutorial_dialog(parent=root, on_finish=_on_tut_done) if root.winfo_exists() else None)
 
-    root.mainloop()
-    return result["config"], result["launch"]
+    class SettingsController:
+        def __init__(self):
+            self.root = root
+            self.show = show_window
+            self.hide = hide_window
+            self.request_show = request_show
+            self.request_hide = request_hide
+            self.destroy = destroy_window
+            self.mainloop = root.mainloop
+
+    ctrl = SettingsController()
+
+    if standalone:
+        root.mainloop()
+        return result["config"], result["launch"]
+    return ctrl

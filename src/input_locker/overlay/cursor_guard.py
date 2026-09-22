@@ -180,11 +180,10 @@ class CursorGuard:
             if not release_success:
                 logger.warning("user32.ClipCursor(None) returned False during release")
 
-            # 2. Restore cursor visibility if hidden
-            if self._cursor_hidden:
-                while self._user32.ShowCursor(True) < 0:
-                    pass
-                self._cursor_hidden = False
+            # 2. Restore cursor visibility unconditionally (counter must be >= 0)
+            while self._user32.ShowCursor(True) < 0:
+                pass
+            self._cursor_hidden = False
 
             self._is_confined = False
             logger.debug("Cursor confinement released and cursor visibility restored")

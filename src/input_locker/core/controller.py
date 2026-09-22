@@ -199,6 +199,27 @@ class LockerController:
         self.stop()
         sys.exit(0)
 
+    def apply_config(self, cfg: Any) -> None:
+        """Dynamically update controller settings from a LockerConfig object."""
+        with self._lock:
+            self._password = getattr(cfg, "password", "")
+            self._password_hash = getattr(cfg, "password_hash", "")
+            self._password_salt = getattr(cfg, "password_salt", "")
+            self.audio_feedback = bool(getattr(cfg, "audio_feedback", False))
+            self._lock_hotkey = getattr(cfg, "lock_hotkey", "F11")
+            self._unlock_hotkey = getattr(cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U")
+            wp = getattr(cfg, "wallpaper", "")
+            if wp and hasattr(self.overlay_manager, "set_wallpaper"):
+                self.overlay_manager.set_wallpaper(wp)
+            elif hasattr(self.overlay_manager, "wallpaper"):
+                self.overlay_manager.wallpaper = wp
+            if hasattr(self.hook_manager, "set_hotkeys"):
+                self.hook_manager.set_hotkeys(
+                    lock_hotkey=self._lock_hotkey,
+                    unlock_hotkey=self._unlock_hotkey,
+                )
+            logger.info("LockerController configuration updated dynamically.")
+
     def start(self) -> None:
         """Start background input hooks and prepare overlay."""
         with self._lock:

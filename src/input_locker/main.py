@@ -1,4 +1,4 @@
-﻿"""CLI Launcher and Entry Point for Windows AV Staging Input Locker.
+"""CLI Launcher and Entry Point for Windows AV Staging Input Locker.
 
 Provides options for overlay backend (win32 or pyqt), network control ports,
 daemon mode, and verbosity settings.
@@ -165,33 +165,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     locker_cfg = LockerConfig.load()
     set_locale(getattr(locker_cfg, "language", "auto"))
 
-    # Always show the Settings GUI on startup so the user sees the Lock button.
-    # Skip only when --no-lock is passed from an automated/daemon context, or --daemon.
-    skip_gui = args.daemon
-    if not skip_gui:
-        try:
-            from input_locker.ui.config_gui import show_config_dialog
-            cfg, should_launch = show_config_dialog(config=locker_cfg)
-            if not should_launch or cfg is None:
-                logger.info("Settings dialog cancelled — exiting.")
-                return 0
-            locker_cfg = cfg
-        except Exception as exc:
-            logger.warning("Settings dialog failed (%s) — launching with defaults.", exc)
-
-    # CLI args take precedence over saved config
+    # ── Initial Configuration Values ───────────────────────────────────────
     effective_password  = args.password or locker_cfg.password
     effective_hash      = locker_cfg.password_hash
     effective_salt      = locker_cfg.password_salt
     effective_wallpaper = getattr(args, "wallpaper", "") or locker_cfg.wallpaper
 
-    should_lock = False
-    if args.lock:
-        should_lock = True
-    elif args.no_lock:
-        should_lock = False
-    else:
-        should_lock = getattr(locker_cfg, "lock_on_launch", True)
+    should_lock = bool(args.lock)
 
     effective_lock_hotkey = getattr(locker_cfg, "lock_hotkey", "F11")
     effective_unlock_hotkey = getattr(locker_cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U")
@@ -202,39 +182,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if effective_audio_feedback:
         logger.info("Audio Feedback: Enabled (Acoustic confirmation cues)")
 
-    # ── System tray icon ───────────────────────────────────────────────────
+    shutdown_event = threading.Event()
     tray = None
-    try:
-        from input_locker.ui.tray_icon import TrayIcon
-        _tray_ref: list = []   # mutable container so lambdas can reach the controller
-
-        def _tray_unlock():
-            if _tray_ref:
-                _tray_ref[0]._on_unlock_requested()
-
-        def _tray_exit():
-            shutdown_event.set()
-
-        def _tray_settings():
-            reopen_settings_event.set()
-
-        def _tray_about():
-            try:
-                from input_locker.ui.config_gui import show_about_dialog
-                show_about_dialog()
-            except Exception as exc:
-                logger.debug("Tray About failed: %s", exc)
-
-        tray = TrayIcon(
-            on_lock=lambda: _tray_ref[0].lock() if _tray_ref else None,
-            on_unlock=_tray_unlock,
-            on_exit=_tray_exit,
-            on_settings=_tray_settings,
-            on_about=_tray_about,
-        )
-        tray.start()
-    except Exception as exc:
-        logger.warning("Tray icon could not start: %s", exc)
+    settings_ctrl = None
 
     # ── State change callback — updates tray icon ──────────────────────────
     def _on_state_change(locked: bool) -> None:
@@ -242,7 +192,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             tray.update_state(locked)
 
     # ── Controller ─────────────────────────────────────────────────────────
-    # Import here (lazy) so PyQt6 / pynput only load after the settings dialog
     from input_locker.core.controller import LockerController
 
     controller = LockerController(
@@ -258,8 +207,72 @@ def main(argv: Optional[List[str]] = None) -> int:
         lock_hotkey=effective_lock_hotkey,
         unlock_hotkey=effective_unlock_hotkey,
     )
-    if tray is not None:
-        _tray_ref.append(controller)   # now the tray lambdas can reach the controller
+
+    # ── Settings Callbacks (Companion Architecture) ────────────────────────
+    def _on_settings_save(new_cfg) -> None:
+        nonlocal locker_cfg
+        locker_cfg = new_cfg
+        controller.apply_config(new_cfg)
+
+    def _on_settings_lock(new_cfg) -> None:
+        nonlocal locker_cfg
+        locker_cfg = new_cfg
+        controller.apply_config(new_cfg)
+        controller.lock()
+
+    def _on_settings_hide() -> None:
+        if tray is not None:
+            tray.notify(
+                "Input Locker",
+                "Running in background. Click this tray icon anytime to reopen Settings.",
+            )
+
+    from input_locker.ui.config_gui import show_config_dialog
+    settings_ctrl = show_config_dialog(
+        config=locker_cfg,
+        on_save=_on_settings_save,
+        on_lock=_on_settings_lock,
+        on_hide=_on_settings_hide,
+        standalone=False,
+    )
+
+    def _request_show_settings() -> None:
+        logger.info("Reopen settings requested (is_locked=%s)", controller.is_locked())
+        if not controller.is_locked():
+            try:
+                controller.overlay_manager.release_cursor()
+            except Exception:
+                pass
+            settings_ctrl.request_show()
+
+    # ── System tray icon ───────────────────────────────────────────────────
+    try:
+        from input_locker.ui.tray_icon import TrayIcon
+
+        def _tray_unlock():
+            controller._on_unlock_requested()
+
+        def _tray_exit():
+            shutdown_event.set()
+            settings_ctrl.destroy()
+
+        def _tray_about():
+            try:
+                from input_locker.ui.config_gui import show_about_dialog
+                show_about_dialog()
+            except Exception as exc:
+                logger.debug("Tray About failed: %s", exc)
+
+        tray = TrayIcon(
+            on_lock=controller.lock,
+            on_unlock=_tray_unlock,
+            on_exit=_tray_exit,
+            on_settings=_request_show_settings,
+            on_about=_tray_about,
+        )
+        tray.start()
+    except Exception as exc:
+        logger.warning("Tray icon could not start: %s", exc)
 
     # Optional network server integration (Milestone 4)
     network_server = None
@@ -284,13 +297,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "Network subsystem (input_locker.network) not installed; running in hotkey-only mode."
             )
 
-    shutdown_event = threading.Event()
-
     def _signal_handler(signum: int, frame: object) -> None:
         logger.info("Shutdown signal (%s) received; stopping...", signum)
         shutdown_event.set()
+        settings_ctrl.destroy()
 
-    # Register termination handlers in main thread
     if threading.current_thread() is threading.main_thread():
         try:
             signal.signal(signal.SIGINT, _signal_handler)
@@ -305,42 +316,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         if network_server is not None:
             network_server.start()
 
-        if should_lock:
-            logger.info("Auto-locking screen on startup...")
-            time.sleep(0.3)
-            controller.lock()
-            logger.info("Input Locker is ACTIVE — Screen is LOCKED.")
-        else:
-            logger.info("Input Locker is ACTIVE and ready (Press F11 to Lock).")
-
-        logger.info("Press Ctrl+C in this terminal to exit.")
-
-        # Listen for secondary instance launch events (e.g. desktop shortcut double-click)
-        reopen_settings_event = threading.Event()
+        # Listen for secondary instance launch events (desktop shortcut / start menu)
         single_instance.start_listener(
-            on_request_callback=lambda: reopen_settings_event.set(),
+            on_request_callback=_request_show_settings,
             shutdown_event=shutdown_event,
         )
 
-        # Main wait loop
-        while not shutdown_event.is_set():
-            if reopen_settings_event.is_set():
-                with open("debug_log.txt", "a") as f: f.write("reopen event is set\n")
-                reopen_settings_event.clear()
-                if not controller.is_locked:
-                    from input_locker.core.single_instance import focus_existing_window
-                    f_res = focus_existing_window();
-                    with open("debug_log.txt", "a") as f: f.write(f"focus_res: {f_res}\n");
-                    if not f_res:
-                        try:
-                            from input_locker.ui.config_gui import show_config_dialog
-                            cfg, _ = show_config_dialog(config=locker_cfg)
-                            if cfg is not None:
-                                locker_cfg = cfg
-                        except Exception as exc:
-                            with open("error_log.txt", "w") as f: f.write(str(exc)); logger.warning("Could not reopen settings: %s", exc)
+        if args.daemon or args.no_lock:
+            settings_ctrl.hide()
+            logger.info("Input Locker running in background (Press F11 to Lock).")
+        elif should_lock or args.lock:
+            settings_ctrl.hide()
+            time.sleep(0.2)
+            controller.lock()
+            logger.info("Input Locker is ACTIVE — Screen is LOCKED.")
+        else:
+            settings_ctrl.show()
+            logger.info("Input Locker Settings GUI opened.")
 
-            time.sleep(0.1)
+        # Run UI event loop on main thread (Companion style)
+        settings_ctrl.mainloop()
 
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt detected.")

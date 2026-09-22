@@ -61,8 +61,8 @@ class _ScreenOverlayWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
-        # Blank cursor over overlay
-        self.setCursor(Qt.CursorShape.BlankCursor)
+        # Cursor over overlay: default to standard arrow; BlankCursor only when shown
+        self.setCursor(Qt.CursorShape.ArrowCursor)
 
         # Load wallpaper pixmap (if path valid)
         self._wallpaper_pixmap: Optional[object] = None
@@ -185,6 +185,7 @@ class _OverlayBridge(QObject):
         vh = _user32.GetSystemMetrics(1)  # SM_CYSCREEN
         for w in self.widgets:
             w.setGeometry(0, 0, vw, vh)
+            w.setCursor(Qt.CursorShape.BlankCursor)
             w.show()
             hwnd = int(w.winId())
             _user32.SetWindowPos(
@@ -204,6 +205,7 @@ class _OverlayBridge(QObject):
                 SWP_HIDEWINDOW | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
             )
             w.hide()
+            w.setCursor(Qt.CursorShape.ArrowCursor)
         self._is_visible = False
 
     @pyqtSlot()
