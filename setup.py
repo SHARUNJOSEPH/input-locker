@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="input-locker",
-    version="0.1.0",
+    version="0.2.0",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     install_requires=[
@@ -16,4 +16,13 @@ setup(
             "pytest>=8.0.0",
         ],
     },
+    entry_points={
+        "console_scripts": [
+            "input-locker=input_locker.main:main",
+        ],
+        "gui_scripts": [
+            "input-locker-gui=input_locker.main:main",
+        ],
+    },
 )
+
