@@ -69,6 +69,8 @@ def focus_existing_window() -> bool:
         found = []
 
         def _enum_proc(hwnd, lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return True
             length = user32.GetWindowTextLengthW(hwnd)
             if length > 0:
                 buf = ctypes.create_unicode_buffer(length + 1)

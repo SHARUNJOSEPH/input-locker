@@ -1010,7 +1010,7 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     status_pill.pack(side="right")
 
     # Password input row
-    pw_entry_lbl = lbl(pw_card, t("label_unlock_password"), muted=True, size=9)
+    pw_entry_lbl = lbl(pw_card, t("label_unlock_password") + (" (Leave blank to keep saved)" if cfg.password_hash else ""), muted=True, size=9)
     pw_entry_lbl.pack(anchor="w", padx=10, pady=(4, 2))
 
     pw_row_entry = tk.Frame(pw_card, bg=CARD_BG)
@@ -1019,11 +1019,8 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     pw_e = entry(pw_row_entry, show="\u2022")
     pw_e.pack(side="left", fill="x", expand=True, ipady=4)
     
-    DUMMY_PW = "********"
     if cfg.password:
         pw_e.insert(0, cfg.password)
-    elif cfg.password_hash:
-        pw_e.insert(0, DUMMY_PW)
 
     def do_clear_password():
         pw_cleared[0] = True
@@ -1040,14 +1037,12 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         btn_remove_pw.pack(side="left", padx=(8, 0))
 
     # Confirm row
-    pw_confirm_lbl = lbl(pw_card, t("label_confirm_password"), muted=True, size=9)
+    pw_confirm_lbl = lbl(pw_card, t("label_confirm_password") + (" (Leave blank to keep saved)" if cfg.password_hash else ""), muted=True, size=9)
     pw_confirm_lbl.pack(anchor="w", padx=10, pady=(6, 2))
     pw2_e = entry(pw_card, show="\u2022")
     pw2_e.pack(fill="x", padx=10, ipady=4)
     if cfg.password:
         pw2_e.insert(0, cfg.password)
-    elif cfg.password_hash:
-        pw2_e.insert(0, DUMMY_PW)
 
     err_lbl = tk.Label(pw_card, text="", bg=CARD_BG, fg=DANGER_TEXT, font=("Segoe UI", 8))
     err_lbl.pack(anchor="w", padx=10, pady=(2, 0))
@@ -1297,7 +1292,7 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
             new_cfg.password = ""
             new_cfg.password_hash = ""
             new_cfg.password_salt = ""
-        elif pw_e.get() and pw_e.get() != DUMMY_PW:
+        elif pw_e.get():
             new_cfg.set_password(pw_e.get())
         else:
             new_cfg.password = cfg.password
