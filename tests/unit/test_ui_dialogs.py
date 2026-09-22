@@ -72,21 +72,48 @@ class TestConfigGui(unittest.TestCase):
         top.destroy()
         self.root.update()
 
-    def test_show_tutorial_dialog(self):
+    def test_show_about_dialog_multilingual(self):
         if not self.root:
             self.skipTest("Headless environment: Tk root not available")
-        finished = [False]
-        def on_fin():
-            finished[0] = True
-        show_tutorial_dialog(parent=self.root, on_finish=on_fin)
-        toplevels = [w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel)]
-        self.assertTrue(len(toplevels) >= 1)
-        top = toplevels[-1]
-        self.assertIn("Quick Start Guide", top.title())
+        from input_locker.core.i18n import set_locale
+        # Test Spanish
+        set_locale("es")
+        show_about_dialog(parent=self.root)
+        top = [w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        self.assertEqual(top.title(), "Acerca de Input Locker")
         top.grab_release()
         top.destroy()
         self.root.update()
 
+        # Test German
+        set_locale("de")
+        show_about_dialog(parent=self.root)
+        top = [w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        self.assertEqual(top.title(), "Über Input Locker")
+        top.grab_release()
+        top.destroy()
+        self.root.update()
+
+        # Reset to English
+        set_locale("en")
+
+    def test_show_tutorial_dialog_multilingual(self):
+        if not self.root:
+            self.skipTest("Headless environment: Tk root not available")
+        from input_locker.core.i18n import set_locale
+        # Test Japanese
+        set_locale("ja")
+        show_tutorial_dialog(parent=self.root)
+        top = [w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        self.assertIn("クイックスタートガイド", top.title())
+        top.grab_release()
+        top.destroy()
+        self.root.update()
+
+        # Reset to English
+        set_locale("en")
+
 
 if __name__ == "__main__":
     unittest.main()
+

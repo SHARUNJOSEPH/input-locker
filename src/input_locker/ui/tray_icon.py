@@ -62,17 +62,21 @@ def _draw_padlock(locked: bool):
 
 
 class TrayIcon:
-    """System tray icon with Lock / Unlock / Exit menu items."""
+    """System tray icon with Lock / Unlock / Settings / About / Exit menu items."""
 
     def __init__(
         self,
-        on_lock:   Callable[[], None],
-        on_unlock: Callable[[], None],
-        on_exit:   Callable[[], None],
+        on_lock:     Callable[[], None],
+        on_unlock:   Callable[[], None],
+        on_exit:     Callable[[], None],
+        on_settings: Optional[Callable[[], None]] = None,
+        on_about:    Optional[Callable[[], None]] = None,
     ) -> None:
-        self._on_lock   = on_lock
-        self._on_unlock = on_unlock
-        self._on_exit   = on_exit
+        self._on_lock     = on_lock
+        self._on_unlock   = on_unlock
+        self._on_exit     = on_exit
+        self._on_settings = on_settings
+        self._on_about    = on_about
         self._icon: Optional[object] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -81,6 +85,14 @@ class TrayIcon:
 
     def _menu_unlock(self, icon, item) -> None:
         threading.Thread(target=self._on_unlock, daemon=True, name="TrayUnlockThread").start()
+
+    def _menu_settings(self, icon, item) -> None:
+        if self._on_settings:
+            threading.Thread(target=self._on_settings, daemon=True, name="TraySettingsThread").start()
+
+    def _menu_about(self, icon, item) -> None:
+        if self._on_about:
+            threading.Thread(target=self._on_about, daemon=True, name="TrayAboutThread").start()
 
     def _menu_check_updates(self, icon, item) -> None:
         def _on_result(update_info):
@@ -108,14 +120,22 @@ class TrayIcon:
 
     def _build_menu(self):
         import pystray
-        return pystray.Menu(
-            pystray.MenuItem("Lock",   self._menu_lock),
-            pystray.MenuItem("Unlock", self._menu_unlock),
+        from input_locker.core.i18n import t
+        items = [
+            pystray.MenuItem(t("tray_menu_lock"),     self._menu_lock),
+            pystray.MenuItem(t("tray_menu_unlock"),   self._menu_unlock),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Check for Updates...", self._menu_check_updates),
+        ]
+        if self._on_settings:
+            items.append(pystray.MenuItem(t("tray_menu_settings"), self._menu_settings))
+        if self._on_about:
+            items.append(pystray.MenuItem(t("tray_menu_about"), self._menu_about))
+        items.extend([
+            pystray.MenuItem(t("tray_menu_check_updates"), self._menu_check_updates),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Exit",   self._menu_exit),
-        )
+            pystray.MenuItem(t("tray_menu_exit"),     self._menu_exit),
+        ])
+        return pystray.Menu(*items)
 
     def start(self) -> None:
         try:

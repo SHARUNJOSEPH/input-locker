@@ -77,6 +77,7 @@ class LockerConfig:
     audio_feedback: bool = False
     lock_hotkey: str = "F11"
     unlock_hotkey: str = "Ctrl+Alt+Shift+U"
+    language: str = "auto"
 
     @property
     def has_password(self) -> bool:
@@ -128,6 +129,7 @@ class LockerConfig:
                     audio_feedback=data.get("audio_feedback", False),
                     lock_hotkey=data.get("lock_hotkey", "F11"),
                     unlock_hotkey=data.get("unlock_hotkey", "Ctrl+Alt+Shift+U"),
+                    language=data.get("language", "auto"),
                 )
                 # If the legacy config contained a plaintext password, immediately resave with hash-only
                 if pw:

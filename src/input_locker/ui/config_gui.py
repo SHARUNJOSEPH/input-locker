@@ -14,6 +14,7 @@ from typing import Optional, Tuple
 
 from input_locker import __version__
 from input_locker.config import LockerConfig, get_assets_dir, get_config_path
+from input_locker.core.i18n import SUPPORTED_LANGUAGES, set_locale, t
 from input_locker.hooks.hotkey import parse_hotkey
 from input_locker.updater import check_for_updates_async
 
@@ -130,7 +131,7 @@ def _make_thumbnail(path: str, w: int = 470, h: int = 100, master: Optional[tk.M
 def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     """Show the Apple-inspired About modal matching the creator portfolio."""
     top = tk.Toplevel(parent)
-    top.title("About Input Locker")
+    top.title(t("about_title"))
     top.resizable(False, False)
     top.configure(bg=BG)
     top.transient(parent)
@@ -213,7 +214,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     ).pack(pady=(0, 4))
 
     tk.Label(
-        pad, text="Windows AV Staging Input Lock Utility",
+        pad, text=t("app_tagline"),
         bg=BG, fg=TEXT_MUTED, font=("Segoe UI", 10),
     ).pack(pady=(0, 8))
 
@@ -222,10 +223,10 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     badge_row.pack(pady=(0, 10))
 
     for text, bg_c, fg_c in [
-        (f"v{__version__}  Production", "#1E1B4B", "#818CF8"),
-        ("Open Source",               SUCCESS_BG, SUCCESS_TEXT),
-        ("MIT License",               "#0C4A6E",  "#38BDF8"),
-        ("Windows 10/11",             "#1C3553",  "#93C5FD"),
+        (t("version_tag", version=__version__), "#1E1B4B", "#818CF8"),
+        (t("open_source"),                     SUCCESS_BG, SUCCESS_TEXT),
+        (t("mit_license"),                     "#0C4A6E",  "#38BDF8"),
+        (t("windows_tag"),                     "#1C3553",  "#93C5FD"),
     ]:
         tk.Label(
             badge_row, text=text,
@@ -234,11 +235,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
         ).pack(side="left", padx=3)
 
     # Description
-    desc_txt = (
-        "A high-performance Windows staging & live AV lock screen utility "
-        "engineered to intercept keyboard and mouse input while keeping background "
-        "rendering engines (Resolume, Watchout, DAWs) running safely."
-    )
+    desc_txt = t("app_desc")
     tk.Label(
         pad, text=desc_txt,
         bg=BG, fg=TEXT_MUTED, font=("Segoe UI", 9),
@@ -253,7 +250,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     repo_card.pack(fill="x", pady=(0, 12), ipady=6, ipadx=10)
 
     tk.Label(
-        repo_card, text="PROJECT REPOSITORY",
+        repo_card, text=t("about_project_repo"),
         bg=CARD_BG, fg=CARD_HEADER, font=("Segoe UI", 8, "bold"),
     ).pack(anchor="w", padx=12, pady=(6, 6))
 
@@ -279,7 +276,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     creator_card.pack(fill="x", pady=(0, 12), ipady=8, ipadx=10)
 
     tk.Label(
-        creator_card, text="CREATED & MAINTAINED BY",
+        creator_card, text=t("about_created_by"),
         bg=CARD_BG, fg=CARD_HEADER, font=("Segoe UI", 8, "bold"),
     ).pack(anchor="w", padx=12, pady=(6, 8))
 
@@ -321,22 +318,22 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     up_info = tk.Frame(up_row, bg=CARD_BG)
     up_info.pack(side="left", fill="both", expand=True)
     tk.Label(
-        up_info, text="🔄  Software Version & Updates",
+        up_info, text=t("about_updates_title"),
         bg=CARD_BG, fg=TEXT_PRIMARY, font=("Segoe UI", 10, "bold"),
     ).pack(anchor="w")
     up_sub = tk.Label(
-        up_info, text=f"Current build: v{__version__} (Production)",
+        up_info, text=t("about_current_build", version=__version__),
         bg=CARD_BG, fg=TEXT_MUTED, font=("Segoe UI", 9),
     )
     up_sub.pack(anchor="w", pady=(2, 0))
 
     def _check_modal():
-        up_btn.config(text="Checking...", state="disabled")
+        up_btn.config(text=t("btn_checking"), state="disabled")
         def _cb(info):
             def _ui():
-                up_btn.config(text="Check for Updates", state="normal")
+                up_btn.config(text=t("btn_check_updates"), state="normal")
                 if info and info.get("available"):
-                    up_sub.config(text=f"Newer build: {info.get('latest_version')} available!", fg="#38BDF8")
+                    up_sub.config(text=t("about_update_avail", version=info.get('latest_version')), fg="#38BDF8")
                     if messagebox.askyesno(
                         "Update Available",
                         f"Input Locker {info.get('latest_version')} is available.\n\nOpen release download page?",
@@ -344,14 +341,14 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
                     ):
                         webbrowser.open(info.get("release_url", APP_RELEASES))
                 else:
-                    up_sub.config(text=f"v{__version__} — You are on the latest version ✓", fg=SUCCESS_TEXT)
-                    messagebox.showinfo("Up to Date", f"Input Locker v{__version__} is the latest version.", parent=top)
+                    up_sub.config(text=f"v{__version__} — {t('about_up_to_date', version=__version__)}", fg=SUCCESS_TEXT)
+                    messagebox.showinfo("Up to Date", t("about_up_to_date", version=__version__), parent=top)
             if top.winfo_exists():
                 top.after(0, _ui)
         check_for_updates_async(callback=_cb)
 
     up_btn = tk.Button(
-        up_row, text="Check for Updates", command=_check_modal,
+        up_row, text=t("btn_check_updates"), command=_check_modal,
         bg="#312E81", fg="#C7D2FE", activebackground="#3730A3", activeforeground="#FFFFFF",
         relief="flat", bd=1, padx=10, pady=4, font=("Segoe UI", 9, "bold"), cursor="hand2",
     )
@@ -365,11 +362,12 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     cl_card.pack(fill="x", pady=(0, 12), ipady=6, ipadx=10)
 
     tk.Label(
-        cl_card, text="WHAT'S NEW",
+        cl_card, text=t("about_whats_new"),
         bg=CARD_BG, fg=CARD_HEADER, font=("Segoe UI", 8, "bold"),
     ).pack(anchor="w", padx=12, pady=(6, 4))
 
     for icon, headline in [
+        ("🌐", "v0.2.0 — Multi-Language Support (English, Spanish, French, German, Japanese, Chinese, Hindi)"),
         ("🎵", "v0.2.0 — Audio Feedback Cues on lock & unlock transitions"),
         ("⌨️", "v0.2.0 — Customizable Lock & Unlock Hotkeys in Settings"),
         ("🖥️", "v0.2.0 — Multi-Monitor virtual screen coverage fix"),
@@ -403,7 +401,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     sys_card.pack(fill="x", pady=(0, 12), ipady=6, ipadx=10)
 
     tk.Label(
-        sys_card, text="SYSTEM INFORMATION",
+        sys_card, text=t("about_system_info"),
         bg=CARD_BG, fg=CARD_HEADER, font=("Segoe UI", 8, "bold"),
     ).pack(anchor="w", padx=12, pady=(6, 4))
 
@@ -422,7 +420,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     # ── Open Source Notice ────────────────────────────────────────────────
     tk.Label(
         pad,
-        text="💡 Built open-source for the AV & live production community.\nFeedback, feature requests, and pull requests are warmly welcomed!",
+        text=t("about_open_source_msg"),
         bg=BG, fg=TEXT_SUBTLE, font=("Segoe UI", 8),
         justify="center",
     ).pack(pady=(2, 10))
@@ -435,7 +433,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
         bg=BG, fg=TEXT_SUBTLE, font=("Segoe UI", 8),
     ).pack(side="left")
     tk.Button(
-        ft_row, text="Close", command=top.destroy,
+        ft_row, text=t("btn_close"), command=top.destroy,
         bg=BTN_SEC_BG, fg=TEXT_PRIMARY, activebackground=BTN_SEC_HOVER, activeforeground=TEXT_PRIMARY,
         relief="flat", bd=1, padx=14, pady=4, font=("Segoe UI", 9), cursor="hand2",
     ).pack(side="right")
@@ -454,7 +452,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
 def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish=None) -> None:
     """Show an Apple-inspired onboarding tutorial guide for new users."""
     top = tk.Toplevel(parent)
-    top.title("Welcome to Input Locker — Quick Start Guide")
+    top.title(t("tut_title"))
     top.resizable(False, False)
     top.configure(bg=BG)
     top.transient(parent)
@@ -505,12 +503,12 @@ def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish
     ht_frame.pack(side="left", fill="both", expand=True)
 
     tk.Label(
-        ht_frame, text="Welcome to Input Locker",
+        ht_frame, text=t("tut_welcome"),
         bg=BG, fg=TEXT_PRIMARY, font=("Segoe UI", 15, "bold"),
     ).pack(anchor="w")
 
     tk.Label(
-        ht_frame, text="Quick start guide: how to lock, protect, and safely unlock your workstation.",
+        ht_frame, text=t("tut_subtitle"),
         bg=BG, fg=TEXT_MUTED, font=("Segoe UI", 9),
     ).pack(anchor="w", pady=(1, 0))
 
@@ -550,34 +548,34 @@ def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish
     make_step(
         content,
         icon_str="🔒",
-        title_str="Step 1: How to Lock the Screen",
-        badge_str="F11 or Click Lock",
-        desc_str="Press F11 at any time or click 'Lock Screen Now'. The screen locks with a secure visual overlay. Video playout engines (Resolume, Watchout, PowerPoint, DAWs) continue rendering visibly and uninterrupted.",
+        title_str=t("tut_step1_title"),
+        badge_str=t("tut_step1_badge", hotkey="F11"),
+        desc_str=t("tut_step1_desc", hotkey="F11"),
     )
 
     make_step(
         content,
         icon_str="🔑",
-        title_str="Step 2: How to Unlock the Screen",
-        badge_str="Ctrl + Alt + Shift + U",
-        desc_str="Press Ctrl + Alt + Shift + U to unlock. If a password is configured, the password entry tab appears. If no password is set, the screen unlocks immediately and restores mouse/keyboard input.",
+        title_str=t("tut_step2_title"),
+        badge_str=t("tut_step2_badge", hotkey="Ctrl + Alt + Shift + U"),
+        desc_str=t("tut_step2_desc", hotkey="Ctrl + Alt + Shift + U"),
         highlight=True,
     )
 
     make_step(
         content,
         icon_str="🛡️",
-        title_str="Step 3: Staging Hardware Protection",
-        badge_str="Win Key Blocked",
-        desc_str="Accidental Windows Key taps and Win+L workstation switches are actively neutralized during locked mode to prevent disruptive desktop lockouts during live presentations.",
+        title_str=t("tut_step3_title"),
+        badge_str=t("tut_step3_badge"),
+        desc_str=t("tut_step3_desc"),
     )
 
     make_step(
         content,
         icon_str="⚙️",
-        title_str="Step 4: Tray Icon & Background Operation",
-        badge_str="System Tray",
-        desc_str="Right-click the Input Locker system tray icon anytime to toggle lock/unlock, open settings, or check for updates. Running in background keeps the utility ready for F11.",
+        title_str=t("tut_step4_title"),
+        badge_str=t("tut_step4_badge"),
+        desc_str=t("tut_step4_desc"),
     )
 
     # ── Bottom Action Button ──────────────────────────────────────────────
@@ -591,7 +589,7 @@ def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish
     btn_row.pack(fill="x", pady=(6, 0))
 
     tk.Button(
-        btn_row, text="  ✓ Got It — Start Using Input Locker  ", command=_finish,
+        btn_row, text=t("tut_btn_got_it"), command=_finish,
         bg=ACCENT_BLUE, fg=TEXT_PRIMARY, activebackground=ACCENT_HOVER, activeforeground=TEXT_PRIMARY,
         relief="flat", bd=0, padx=16, pady=7, font=("Segoe UI", 10, "bold"), cursor="hand2",
     ).pack(side="right")
@@ -621,8 +619,9 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     # ── root ─────────────────────────────────────────────────────────────
     root = tk.Tk()
     root.withdraw()                # hide while building to prevent white flash
-    root.title("Input Locker — Settings")
-    root.resizable(False, False)
+    root.title(f"{t('app_name')} — Settings")
+    root.resizable(True, True)     # Responsive & resizable
+    root.minsize(580, 500)
     root.configure(bg=BG)
 
     # ── helper factories ──────────────────────────────────────────────────
@@ -690,9 +689,9 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         except Exception as exc:
             logger.debug("Failed to set wm_iconphoto: %s", exc)
 
-    # ── header bar ────────────────────────────────────────────────────────
+    # ── header bar (permanently docked to top) ────────────────────────────
     header = tk.Frame(root, bg=BG)
-    header.pack(fill="x", padx=20, pady=(16, 12))
+    header.pack(side="top", fill="x", padx=18, pady=(14, 10))
 
     hdr_row = tk.Frame(header, bg=BG)
     hdr_row.pack(fill="x")
@@ -722,10 +721,10 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         padx=6, pady=1, bd=1, relief="solid",
     ).pack(side="left", padx=(8, 0))
 
-    lbl(titles_frame, "AV Staging Lock & Input Interception",
-        muted=True, size=9).pack(anchor="w", pady=(1, 0))
+    tagline_lbl = lbl(titles_frame, t("app_tagline"), muted=True, size=9)
+    tagline_lbl.pack(anchor="w", pady=(1, 0))
 
-    # Top right header buttons
+    # Top right header action buttons
     top_btns = tk.Frame(hdr_row, bg=BG)
     top_btns.pack(side="right")
 
@@ -736,10 +735,10 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         show_tutorial_dialog(parent=root)
 
     def manual_check_updates():
-        check_btn.config(text="Checking...", state="disabled")
+        check_btn.config(text=t("btn_checking"), state="disabled")
         def _on_manual_result(info: Optional[dict]):
             def _ui():
-                check_btn.config(text="🔄 Check for Updates", state="normal")
+                check_btn.config(text=t("btn_check_updates"), state="normal")
                 if info and info.get("available"):
                     on_update_found(info)
                 else:
@@ -756,18 +755,77 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
             repo_or_url=getattr(cfg, "update_repo", ""),
         )
 
-    check_btn = btn(top_btns, "🔄 Check for Updates", manual_check_updates)
-    check_btn.pack(side="right")
+    # Header buttons: primary Lock button is prominently visible at the top right!
+    header_lock_btn = btn(top_btns, t("btn_lock_now_header"), lambda: save_and_lock(), primary=True)
+    header_lock_btn.pack(side="right", padx=(8, 0))
 
-    about_btn = btn(top_btns, "👤 About", _open_about)
-    about_btn.pack(side="right", padx=(6, 6))
+    check_btn = btn(top_btns, t("btn_check_updates"), manual_check_updates)
+    check_btn.pack(side="right", padx=(4, 0))
 
-    guide_btn = btn(top_btns, "📖 Guide", _open_tutorial)
+    about_btn = btn(top_btns, t("btn_about"), _open_about)
+    about_btn.pack(side="right", padx=(4, 0))
+
+    guide_btn = btn(top_btns, t("btn_guide"), _open_tutorial)
     guide_btn.pack(side="right")
+
+    # ── Action Button Bar (permanently docked to bottom) ──────────────────
+    btn_row = tk.Frame(root, bg=BG)
+    btn_row.pack(side="bottom", fill="x", padx=18, pady=(10, 14))
+
+    cancel_btn = btn(btn_row, t("btn_cancel"), lambda: cancel())
+    cancel_btn.pack(side="left")
+
+    initial_lk = getattr(cfg, 'lock_hotkey', 'F11')
+    run_bg_btn = btn(btn_row, t("btn_run_background", hotkey=initial_lk), lambda: run_in_background())
+    run_bg_btn.pack(side="left", padx=8)
+
+    bottom_lock_btn = btn(btn_row, f"  {t('btn_lock_now')}  ", lambda: save_and_lock(), primary=True)
+    bottom_lock_btn.pack(side="right")
+
+    # ── Scrollable Card Viewport (fills all middle space) ─────────────────
+    scroll_container = tk.Frame(root, bg=BG)
+    scroll_container.pack(side="top", fill="both", expand=True, padx=8, pady=0)
+
+    canvas_scroll = tk.Canvas(scroll_container, bg=BG, bd=0, highlightthickness=0)
+    scrollbar = tk.Scrollbar(scroll_container, orient="vertical", command=canvas_scroll.yview)
+    canvas_scroll.configure(yscrollcommand=scrollbar.set)
+
+    scrollbar.pack(side="right", fill="y")
+    canvas_scroll.pack(side="left", fill="both", expand=True)
+
+    content = tk.Frame(canvas_scroll, bg=BG)
+    content_window = canvas_scroll.create_window((0, 0), window=content, anchor="nw")
+
+    def _on_content_configure(e):
+        canvas_scroll.configure(scrollregion=canvas_scroll.bbox("all"))
+
+    def _on_canvas_configure(e):
+        canvas_scroll.itemconfig(content_window, width=e.width)
+
+    content.bind("<Configure>", _on_content_configure)
+    canvas_scroll.bind("<Configure>", _on_canvas_configure)
+
+    def _on_mousewheel(e):
+        try:
+            if root.winfo_exists() and canvas_scroll.winfo_exists():
+                canvas_scroll.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        except Exception:
+            pass
+
+    canvas_scroll.bind_all("<MouseWheel>", _on_mousewheel)
+
+    def _on_destroy(e):
+        if e.widget == root:
+            try:
+                canvas_scroll.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
+
+    root.bind("<Destroy>", _on_destroy)
 
     # ── update banner ─────────────────────────────────────────────────────
     update_banner = tk.Frame(
-        root, bg=BANNER_BG, bd=1, relief="solid", highlightthickness=1,
+        content, bg=BANNER_BG, bd=1, relief="solid", highlightthickness=1,
         highlightbackground=BANNER_BD,
     )
 
@@ -775,7 +833,7 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         if not info or not root.winfo_exists():
             return
         ver = info.get("latest_version", "")
-        url = info.get("release_url", "https://github.com/input-locker/input-locker/releases/latest")
+        url = info.get("release_url", "https://github.com/SHARUNJOSEPH/input-locker/releases/latest")
 
         for child in update_banner.winfo_children():
             child.destroy()
@@ -806,22 +864,23 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         )
         close_btn.pack(side="right", padx=(0, 8), pady=7)
 
-        update_banner.pack(fill="x", padx=20, pady=(0, 10), before=guide_card)
+        update_banner.pack(fill="x", padx=10, pady=(0, 10), before=guide_card)
 
     # ── In-App Quick Shortcut & Unlock Guide ───────────────────────────
     guide_card = tk.Frame(
-        root, bg="#0E172A", bd=1, relief="solid",
+        content, bg="#0E172A", bd=1, relief="solid",
         highlightthickness=1, highlightbackground="#1E3A8A",
     )
-    guide_card.pack(fill="x", padx=20, pady=(0, 10), ipady=5, ipadx=8)
+    guide_card.pack(fill="x", padx=10, pady=(0, 10), ipady=5, ipadx=8)
 
     g_row = tk.Frame(guide_card, bg="#0E172A")
     g_row.pack(fill="x", padx=8, pady=(4, 2))
 
-    tk.Label(
-        g_row, text="🔑  HOW TO UNLOCK:",
+    guide_unlock_title_lbl = tk.Label(
+        g_row, text=t("guide_how_to_unlock"),
         bg="#0E172A", fg="#38BDF8", font=("Segoe UI", 9, "bold"),
-    ).pack(side="left")
+    )
+    guide_unlock_title_lbl.pack(side="left")
 
     unlock_guide_lbl = tk.Label(
         g_row, text=getattr(cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U"),
@@ -830,10 +889,11 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     )
     unlock_guide_lbl.pack(side="left", padx=(8, 14))
 
-    tk.Label(
-        g_row, text="🔒  HOW TO LOCK:",
+    guide_lock_title_lbl = tk.Label(
+        g_row, text=t("guide_how_to_lock"),
         bg="#0E172A", fg="#94A3B8", font=("Segoe UI", 9, "bold"),
-    ).pack(side="left")
+    )
+    guide_lock_title_lbl.pack(side="left")
 
     lock_guide_lbl = tk.Label(
         g_row, text=getattr(cfg, "lock_hotkey", "F11"),
@@ -845,22 +905,24 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     initial_unlock = getattr(cfg, "unlock_hotkey", "Ctrl + Alt + Shift + U")
     guide_sub_lbl = tk.Label(
         guide_card,
-        text=f"Press {initial_unlock} together at any time while locked to reveal password entry and unlock.",
+        text=t("guide_unlock_instruction", hotkey=initial_unlock),
         bg="#0E172A", fg=TEXT_MUTED, font=("Segoe UI", 8),
     )
     guide_sub_lbl.pack(anchor="w", padx=8, pady=(1, 3))
 
     # ── Card 1: Wallpaper Section ─────────────────────────────────────────
     wp_card = tk.Frame(
-        root, bg=CARD_BG, bd=1, relief="solid",
+        content, bg=CARD_BG, bd=1, relief="solid",
         highlightthickness=1, highlightbackground=CARD_BORDER,
     )
-    wp_card.pack(fill="x", padx=20, pady=(0, 12), ipady=6, ipadx=6)
+    wp_card.pack(fill="x", padx=10, pady=(0, 10), ipady=6, ipadx=6)
 
     wp_hdr = tk.Frame(wp_card, bg=CARD_BG)
     wp_hdr.pack(fill="x", padx=10, pady=(6, 4))
-    lbl(wp_hdr, "LOCK SCREEN WALLPAPER", bold=True, size=8, subtle=True).pack(side="left")
-    lbl(wp_hdr, "Main display background image", muted=True, size=8).pack(side="right")
+    wp_title_lbl = lbl(wp_hdr, t("card_wallpaper_title"), bold=True, size=8, subtle=True)
+    wp_title_lbl.pack(side="left")
+    wp_subtitle_lbl = lbl(wp_hdr, t("card_wallpaper_subtitle"), muted=True, size=8)
+    wp_subtitle_lbl.pack(side="right")
 
     wp_row = tk.Frame(wp_card, bg=CARD_BG)
     wp_row.pack(fill="x", padx=10, pady=(2, 6))
@@ -884,10 +946,10 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     def clear_wallpaper():
         wp_var.set("")
 
-    btn_browse = btn(wp_row, "📁 Browse...", browse)
+    btn_browse = btn(wp_row, t("btn_browse"), browse)
     btn_browse.pack(side="left", padx=(8, 0))
 
-    btn_clear = btn(wp_row, "✕ Remove", clear_wallpaper, danger=True)
+    btn_clear = btn(wp_row, t("btn_remove"), clear_wallpaper, danger=True)
     btn_clear.pack(side="left", padx=(6, 0))
 
     # Preview canvas
@@ -907,17 +969,16 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
                 _thumb_ref.append(ph)
                 canvas.create_image(0, 0, anchor="nw", image=ph)
                 # Subtle center badge indicator
-                canvas.create_rectangle(175, 34, 295, 62, fill="#000000", outline="#38BDF8", width=1)
-                canvas.create_text(235, 48, text="🔒 Lock Screen Active", fill="#F8FAFC",
+                canvas.create_rectangle(165, 34, 305, 62, fill="#000000", outline="#38BDF8", width=1)
+                canvas.create_text(235, 48, text=t("wp_badge_active"), fill="#F8FAFC",
                                    font=("Segoe UI", 9, "bold"))
                 return
 
         # Apple-style Dark Glass blur state representation
         canvas.create_rectangle(0, 0, 470, 95, fill="#0D1322", outline="")
-        # Centered Apple-like glass badge
         canvas.create_oval(215, 18, 255, 58, fill="#1E293B", outline="#334155")
         canvas.create_text(235, 38, text="🔒", fill="#FFFFFF", font=("Segoe UI Emoji", 14))
-        canvas.create_text(235, 72, text="Dark Blur Glass Mode (Default Display Pass-through)",
+        canvas.create_text(235, 72, text=t("wp_badge_glass"),
                            fill=TEXT_MUTED, font=("Segoe UI", 9))
 
     wp_var.trace_add("write", refresh_thumb)
@@ -925,21 +986,22 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
 
     # ── Card 2: Security & Credentials Section ────────────────────────────
     pw_card = tk.Frame(
-        root, bg=CARD_BG, bd=1, relief="solid",
+        content, bg=CARD_BG, bd=1, relief="solid",
         highlightthickness=1, highlightbackground=CARD_BORDER,
     )
-    pw_card.pack(fill="x", padx=20, pady=(0, 12), ipady=6, ipadx=6)
+    pw_card.pack(fill="x", padx=10, pady=(0, 10), ipady=6, ipadx=6)
 
     pw_hdr = tk.Frame(pw_card, bg=CARD_BG)
     pw_hdr.pack(fill="x", padx=10, pady=(6, 4))
-    lbl(pw_hdr, "SECURITY & CREDENTIALS", bold=True, size=8, subtle=True).pack(side="left")
+    pw_title_lbl = lbl(pw_hdr, t("card_security_title"), bold=True, size=8, subtle=True)
+    pw_title_lbl.pack(side="left")
 
     has_saved_pw = bool(cfg.password or cfg.password_hash)
     pw_cleared = [False]
 
     status_pill = tk.Label(
         pw_hdr,
-        text="🔒 Password Protected" if has_saved_pw else "🔓 No Password Required (Shortcut Only)",
+        text=t("badge_password_protected") if has_saved_pw else t("badge_no_password"),
         bg=SUCCESS_BG if has_saved_pw else "#1E293B",
         fg=SUCCESS_TEXT if has_saved_pw else TEXT_MUTED,
         font=("Segoe UI", 8, "bold"),
@@ -948,8 +1010,8 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     status_pill.pack(side="right")
 
     # Password input row
-    lbl(pw_card, "Unlock Password (leave blank for immediate shortcut unlock)",
-        muted=True, size=9).pack(anchor="w", padx=10, pady=(4, 2))
+    pw_entry_lbl = lbl(pw_card, t("label_unlock_password"), muted=True, size=9)
+    pw_entry_lbl.pack(anchor="w", padx=10, pady=(4, 2))
 
     pw_row_entry = tk.Frame(pw_card, bg=CARD_BG)
     pw_row_entry.pack(fill="x", padx=10)
@@ -964,15 +1026,18 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         pw_e.delete(0, tk.END)
         pw2_e.delete(0, tk.END)
         status_pill.config(
-            text="🔓 Password Removed (Apply to save)",
+            text=t("badge_password_removed"),
             bg="#374151", fg="#F59E0B",
         )
 
+    btn_remove_pw = None
     if has_saved_pw:
-        btn(pw_row_entry, "✕ Remove Password", do_clear_password, danger=True).pack(side="left", padx=(8, 0))
+        btn_remove_pw = btn(pw_row_entry, t("btn_remove_password"), do_clear_password, danger=True)
+        btn_remove_pw.pack(side="left", padx=(8, 0))
 
     # Confirm row
-    lbl(pw_card, "Confirm Password", muted=True, size=9).pack(anchor="w", padx=10, pady=(6, 2))
+    pw_confirm_lbl = lbl(pw_card, t("label_confirm_password"), muted=True, size=9)
+    pw_confirm_lbl.pack(anchor="w", padx=10, pady=(6, 2))
     pw2_e = entry(pw_card, show="\u2022")
     pw2_e.pack(fill="x", padx=10, ipady=4)
     if cfg.password:
@@ -981,25 +1046,28 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     err_lbl = tk.Label(pw_card, text="", bg=CARD_BG, fg=DANGER_TEXT, font=("Segoe UI", 8))
     err_lbl.pack(anchor="w", padx=10, pady=(2, 0))
 
-    lbl(pw_card, "💡 Unlock instruction: Press unlock combo when locked → Enter Password → Press Enter.",
-        subtle=True, size=8).pack(anchor="w", padx=10, pady=(2, 4))
+    pw_hint_lbl = lbl(pw_card, t("hint_unlock_flow"), subtle=True, size=8)
+    pw_hint_lbl.pack(anchor="w", padx=10, pady=(2, 4))
 
     # ── Card 3: Hotkeys & Audio Feedback Section ──────────────────────────
     hk_card = tk.Frame(
-        root, bg=CARD_BG, bd=1, relief="solid",
+        content, bg=CARD_BG, bd=1, relief="solid",
         highlightthickness=1, highlightbackground=CARD_BORDER,
     )
-    hk_card.pack(fill="x", padx=20, pady=(0, 10), ipady=5, ipadx=6)
+    hk_card.pack(fill="x", padx=10, pady=(0, 10), ipady=5, ipadx=6)
 
     hk_hdr = tk.Frame(hk_card, bg=CARD_BG)
     hk_hdr.pack(fill="x", padx=10, pady=(4, 4))
-    lbl(hk_hdr, "SHORTCUTS & AUDIO FEEDBACK", bold=True, size=8, subtle=True).pack(side="left")
-    lbl(hk_hdr, "Custom triggers & acoustic cues (FOH / Staging)", muted=True, size=8).pack(side="right")
+    hk_title_lbl = lbl(hk_hdr, t("card_shortcuts_title"), bold=True, size=8, subtle=True)
+    hk_title_lbl.pack(side="left")
+    hk_subtitle_lbl = lbl(hk_hdr, t("card_shortcuts_subtitle"), muted=True, size=8)
+    hk_subtitle_lbl.pack(side="right")
 
     # Lock hotkey row
     hk_row1 = tk.Frame(hk_card, bg=CARD_BG)
     hk_row1.pack(fill="x", padx=10, pady=(2, 3))
-    lbl(hk_row1, "Lock Trigger:", muted=True, size=9).pack(side="left", padx=(0, 8))
+    hk_lock_lbl = lbl(hk_row1, t("label_lock_trigger"), muted=True, size=9)
+    hk_lock_lbl.pack(side="left", padx=(0, 8))
 
     lock_hk_var = tk.StringVar(value=getattr(cfg, "lock_hotkey", "F11"))
     lock_hk_entry = entry(hk_row1, textvariable=lock_hk_var, width=12)
@@ -1014,7 +1082,8 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     # Unlock hotkey row
     hk_row2 = tk.Frame(hk_card, bg=CARD_BG)
     hk_row2.pack(fill="x", padx=10, pady=(3, 3))
-    lbl(hk_row2, "Unlock Combo:", muted=True, size=9).pack(side="left", padx=(0, 6))
+    hk_unlock_lbl = lbl(hk_row2, t("label_unlock_combo"), muted=True, size=9)
+    hk_unlock_lbl.pack(side="left", padx=(0, 6))
 
     unlock_hk_var = tk.StringVar(value=getattr(cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U"))
     unlock_hk_entry = entry(hk_row2, textvariable=unlock_hk_var, width=20)
@@ -1031,7 +1100,8 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         ulk = unlock_hk_var.get().strip() or "Ctrl+Alt+Shift+U"
         lock_guide_lbl.config(text=lk)
         unlock_guide_lbl.config(text=ulk)
-        guide_sub_lbl.config(text=f"Press {ulk} together at any time while locked to reveal password entry and unlock.")
+        guide_sub_lbl.config(text=t("guide_unlock_instruction", hotkey=ulk))
+        run_bg_btn.config(text=t("btn_run_background", hotkey=lk))
 
     lock_hk_var.trace_add("write", update_guide_badges)
     unlock_hk_var.trace_add("write", update_guide_badges)
@@ -1043,39 +1113,150 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
     audio_feedback_var = tk.BooleanVar(value=getattr(cfg, "audio_feedback", False))
     audio_chk = tk.Checkbutton(
         audio_row,
-        text="🔊 Play acoustic feedback chime on state transitions (lock / unlock)",
+        text=t("chk_audio_feedback"),
         variable=audio_feedback_var,
         bg=CARD_BG, fg=TEXT_PRIMARY, selectcolor=INPUT_BG,
         activebackground=CARD_BG, activeforeground=TEXT_PRIMARY,
         font=("Segoe UI", 9),
     )
     audio_chk.pack(anchor="w")
-    lbl(audio_row, "Provides audible confirmation in dark front-of-house (FOH) booths and remote staging racks.",
-        subtle=True, size=8).pack(anchor="w", padx=24, pady=(1, 2))
+    audio_hint_lbl = lbl(audio_row, t("hint_audio_feedback"), subtle=True, size=8)
+    audio_hint_lbl.pack(anchor="w", padx=24, pady=(1, 2))
 
-    # ── Preferences ───────────────────────────────────────────────────────
-    opt_box = tk.Frame(root, bg=BG)
-    opt_box.pack(fill="x", padx=20, pady=(0, 10))
+    # ── Card 4: Preferences & Localization ───────────────────────────────
+    pref_card = tk.Frame(
+        content, bg=CARD_BG, bd=1, relief="solid",
+        highlightthickness=1, highlightbackground=CARD_BORDER,
+    )
+    pref_card.pack(fill="x", padx=10, pady=(0, 10), ipady=6, ipadx=6)
+
+    pref_hdr = tk.Frame(pref_card, bg=CARD_BG)
+    pref_hdr.pack(fill="x", padx=10, pady=(4, 6))
+    pref_title_lbl = lbl(pref_hdr, t("card_preferences_title"), bold=True, size=8, subtle=True)
+    pref_title_lbl.pack(side="left")
+
+    lang_row = tk.Frame(pref_card, bg=CARD_BG)
+    lang_row.pack(fill="x", padx=10, pady=(2, 6))
+    pref_lang_lbl = lbl(lang_row, t("label_language"), muted=True, size=9)
+    pref_lang_lbl.pack(side="left", padx=(0, 10))
+
+    lang_display_names = {
+        "auto": "🌐 Auto-Detect (System OS)",
+        **SUPPORTED_LANGUAGES,
+    }
+
+    current_lang_code = getattr(cfg, "language", "auto")
+    if current_lang_code not in lang_display_names:
+        current_lang_code = "auto"
+
+    current_lang_var = tk.StringVar(value=current_lang_code)
+    current_display_var = tk.StringVar(value=lang_display_names.get(current_lang_code, "🌐 Auto-Detect (System OS)"))
+
+    lang_mb = tk.Menubutton(
+        lang_row,
+        textvariable=current_display_var,
+        bg=INPUT_BG, fg=TEXT_PRIMARY,
+        activebackground=INPUT_BORDER, activeforeground=TEXT_PRIMARY,
+        relief="flat", bd=1,
+        highlightthickness=1, highlightbackground=INPUT_BORDER,
+        padx=12, pady=4,
+        font=("Segoe UI", 9, "bold"),
+        cursor="hand2",
+    )
+    lang_menu = tk.Menu(
+        lang_mb, tearoff=0,
+        bg=CARD_BG, fg=TEXT_PRIMARY,
+        activebackground=ACCENT_BLUE, activeforeground=TEXT_PRIMARY,
+        font=("Segoe UI", 9),
+    )
+    lang_mb["menu"] = lang_menu
+
+    def on_select_lang(code: str):
+        current_lang_var.set(code)
+        current_display_var.set(lang_display_names.get(code, code))
+        set_locale(code)
+        cfg.language = code
+        try:
+            cfg.save()
+        except Exception as exc:
+            logger.debug("Failed to auto-save language preference: %s", exc)
+        refresh_ui_language()
+
+    for code, display in lang_display_names.items():
+        lang_menu.add_command(label=display, command=lambda c=code: on_select_lang(c))
+
+    lang_mb.pack(side="left")
+
+    chk_row = tk.Frame(pref_card, bg=CARD_BG)
+    chk_row.pack(fill="x", padx=10, pady=(4, 2))
 
     check_updates_var = tk.BooleanVar(value=getattr(cfg, "check_updates", True))
     chk = tk.Checkbutton(
-        opt_box,
-        text="Automatically check for updates on launch (offline-safe, zero telemetry)",
+        chk_row,
+        text=t("chk_auto_updates"),
         variable=check_updates_var,
-        bg=BG, fg=TEXT_MUTED, selectcolor=INPUT_BG, activebackground=BG, activeforeground=TEXT_PRIMARY,
+        bg=CARD_BG, fg=TEXT_MUTED, selectcolor=INPUT_BG, activebackground=CARD_BG, activeforeground=TEXT_PRIMARY,
         font=("Segoe UI", 8),
     )
     chk.pack(anchor="w")
+
+    # ── Dynamic Multi-Language UI Refresh ─────────────────────────────────
+    def refresh_ui_language():
+        root.title(f"{t('app_name')} — Settings")
+        tagline_lbl.config(text=t("app_tagline"))
+        header_lock_btn.config(text=t("btn_lock_now_header"))
+        check_btn.config(text=t("btn_check_updates"))
+        about_btn.config(text=t("btn_about"))
+        guide_btn.config(text=t("btn_guide"))
+
+        guide_unlock_title_lbl.config(text=t("guide_how_to_unlock"))
+        guide_lock_title_lbl.config(text=t("guide_how_to_lock"))
+        guide_sub_lbl.config(text=t("guide_unlock_instruction", hotkey=unlock_hk_var.get().strip() or "Ctrl+Alt+Shift+U"))
+
+        wp_title_lbl.config(text=t("card_wallpaper_title"))
+        wp_subtitle_lbl.config(text=t("card_wallpaper_subtitle"))
+        btn_browse.config(text=t("btn_browse"))
+        btn_clear.config(text=t("btn_remove"))
+
+        pw_title_lbl.config(text=t("card_security_title"))
+        pw_entry_lbl.config(text=t("label_unlock_password"))
+        pw_confirm_lbl.config(text=t("label_confirm_password"))
+        pw_hint_lbl.config(text=t("hint_unlock_flow"))
+        if btn_remove_pw and btn_remove_pw.winfo_exists():
+            btn_remove_pw.config(text=t("btn_remove_password"))
+
+        hk_title_lbl.config(text=t("card_shortcuts_title"))
+        hk_subtitle_lbl.config(text=t("card_shortcuts_subtitle"))
+        hk_lock_lbl.config(text=t("label_lock_trigger"))
+        hk_unlock_lbl.config(text=t("label_unlock_combo"))
+        audio_chk.config(text=t("chk_audio_feedback"))
+        audio_hint_lbl.config(text=t("hint_audio_feedback"))
+
+        pref_title_lbl.config(text=t("card_preferences_title"))
+        pref_lang_lbl.config(text=t("label_language"))
+        chk.config(text=t("chk_auto_updates"))
+
+        cancel_btn.config(text=t("btn_cancel"))
+        run_bg_btn.config(text=t("btn_run_background", hotkey=lock_hk_var.get().strip() or "F11"))
+        bottom_lock_btn.config(text=f"  {t('btn_lock_now')}  ")
+
+        has_pw = bool(pw_e.get() or cfg.password or cfg.password_hash) and not pw_cleared[0]
+        status_pill.config(
+            text=t("badge_password_protected") if has_pw else t("badge_no_password"),
+            bg=SUCCESS_BG if has_pw else "#1E293B",
+            fg=SUCCESS_TEXT if has_pw else TEXT_MUTED,
+        )
+        refresh_thumb()
 
     # ── Validation & Config Building ──────────────────────────────────────
     def validate() -> bool:
         pw, pw2 = pw_e.get(), pw2_e.get()
         wp = wp_var.get().strip()
         if pw != pw2:
-            err_lbl.config(text="⚠ Passwords do not match.")
+            err_lbl.config(text=t("err_password_mismatch"))
             return False
         if wp and not Path(wp).is_file():
-            messagebox.showerror("Invalid Wallpaper", f"File not found:\n{wp}", parent=root)
+            messagebox.showerror("Invalid Wallpaper", t("err_invalid_wallpaper", path=wp), parent=root)
             return False
 
         lk = lock_hk_var.get().strip()
@@ -1083,12 +1264,12 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         try:
             parse_hotkey(lk)
         except Exception as exc:
-            messagebox.showerror("Invalid Lock Hotkey", f"Invalid lock hotkey '{lk}':\n{exc}", parent=root)
+            messagebox.showerror("Invalid Lock Hotkey", t("err_invalid_lock_hotkey", hotkey=lk, error=str(exc)), parent=root)
             return False
         try:
             parse_hotkey(ulk)
         except Exception as exc:
-            messagebox.showerror("Invalid Unlock Hotkey", f"Invalid unlock hotkey '{ulk}':\n{exc}", parent=root)
+            messagebox.showerror("Invalid Unlock Hotkey", t("err_invalid_unlock_hotkey", hotkey=ulk, error=str(exc)), parent=root)
             return False
 
         err_lbl.config(text="")
@@ -1104,6 +1285,7 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
             audio_feedback=audio_feedback_var.get(),
             lock_hotkey=lock_hk_var.get().strip(),
             unlock_hotkey=unlock_hk_var.get().strip(),
+            language=current_lang_var.get(),
         )
         if pw_cleared[0]:
             new_cfg.password = ""
@@ -1136,34 +1318,12 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
         root.destroy()
 
     def cancel():
-        # Auto-save changes so closing the window never loses user settings
         try:
             current_cfg = build_config(lock_on_launch=cfg.lock_on_launch)
             current_cfg.save()
         except Exception:
             pass
         root.destroy()
-
-    # ── Action Button Bar ─────────────────────────────────────────────────
-    btn_row = tk.Frame(root, bg=BG)
-    btn_row.pack(fill="x", padx=20, pady=(0, 16))
-
-    btn(btn_row, "Cancel", cancel).pack(side="left")
-    initial_lk = getattr(cfg, 'lock_hotkey', 'F11')
-    run_bg_btn = btn(btn_row, f"Run in Background ({initial_lk} to Lock)", run_in_background)
-    run_bg_btn.pack(side="left", padx=8)
-    btn(btn_row, "  🔒 Lock Screen Now  ", save_and_lock, primary=True).pack(side="right")
-
-    # Wire update to run_bg_btn
-    def _update_all_hotkey_labels(*_):
-        lk = lock_hk_var.get().strip() or "F11"
-        ulk = unlock_hk_var.get().strip() or "Ctrl+Alt+Shift+U"
-        lock_guide_lbl.config(text=lk)
-        unlock_guide_lbl.config(text=ulk)
-        guide_sub_lbl.config(text=f"Press {ulk} together at any time while locked to reveal password entry and unlock.")
-        run_bg_btn.config(text=f"Run in Background ({lk} to Lock)")
-
-    lock_hk_var.trace_add("write", _update_all_hotkey_labels)
 
     root.protocol("WM_DELETE_WINDOW", cancel)
 
@@ -1176,9 +1336,10 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
 
     # ── Reveal Window ─────────────────────────────────────────────────────
     root.update_idletasks()
-    W, H = 610, 780
+    W = 620
     sx = root.winfo_screenwidth()
     sy = root.winfo_screenheight()
+    H = min(760, max(540, sy - 90))
     root.geometry(f"{W}x{H}+{(sx - W)//2}+{(sy - H)//2}")
     root.update()
     root.deiconify()

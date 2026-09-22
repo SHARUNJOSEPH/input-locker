@@ -161,7 +161,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # ── Configuration loading ──────────────────────────────────────────────
     from input_locker.config import LockerConfig
+    from input_locker.core.i18n import set_locale
     locker_cfg = LockerConfig.load()
+    set_locale(getattr(locker_cfg, "language", "auto"))
 
     # Always show the Settings GUI on startup so the user sees the Lock button.
     # Skip only when --no-lock is passed from an automated/daemon context, or --daemon.
@@ -213,10 +215,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         def _tray_exit():
             shutdown_event.set()
 
+        def _tray_settings():
+            reopen_settings_event.set()
+
+        def _tray_about():
+            try:
+                from input_locker.ui.config_gui import show_about_dialog
+                show_about_dialog()
+            except Exception as exc:
+                logger.debug("Tray About failed: %s", exc)
+
         tray = TrayIcon(
             on_lock=lambda: _tray_ref[0].lock() if _tray_ref else None,
             on_unlock=_tray_unlock,
             on_exit=_tray_exit,
+            on_settings=_tray_settings,
+            on_about=_tray_about,
         )
         tray.start()
     except Exception as exc:
