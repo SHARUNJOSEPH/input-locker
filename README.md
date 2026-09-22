@@ -1,4 +1,4 @@
-# Windows AV Staging Input Locker
+﻿# Windows AV Staging Input Locker
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://microsoft.com/windows)
@@ -47,11 +47,19 @@ A high-performance, zero-latency background utility engineered for Windows live 
 
 Choose your preferred download package. **No Python or external runtimes are required!**
 
+<p align="center">
+  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
+    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.1-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
+  </a>
+</p>
+
+## 📥 Direct Downloads
+
 | Package | Format | Architecture | Download Link |
 | :--- | :---: | :---: | :--- |
-| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.1.0.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Setup-v0.1.0.exe) |
+| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.1.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Setup-v0.2.1.exe) |
 | **Input Locker Standalone** | Portable `.exe` | Windows 10 / 11 (64-bit) | [⬇️ **Download `InputLocker.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker.exe) |
-| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Windows-x64.zip) |
+| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.1-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-v0.2.1-Windows-x64.zip) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 
 ### ⚡ Command-Line Install (`winget`)
