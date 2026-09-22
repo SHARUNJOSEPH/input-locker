@@ -139,6 +139,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     setup_logging(args.verbose)
 
+    # ── Windows Taskbar AppUserModelID Setup ─────────────────────────────
+    # Ensures Windows displays the application icon on the taskbar instead of python.exe
+    try:
+        import ctypes
+        myappid = f"SharunJoseph.InputLocker.App.{__version__}"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception as exc:
+        logger.debug("Could not set AppUserModelID: %s", exc)
+
     # ── Single-instance enforcement ─────────────────────────────────────────
     from input_locker.core.single_instance import SingleInstanceManager
     single_instance = SingleInstanceManager()

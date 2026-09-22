@@ -2,7 +2,7 @@
 ; Generates a clean Windows Installer (.exe) with desktop and start menu shortcuts
 
 #define MyAppName "Input Locker"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.2.0"
 #define MyAppPublisher "Joseph Sharun"
 #define MyAppURL "https://github.com/SHARUNJOSEPH/input-locker"
 #define MyAppExeName "InputLocker.exe"
@@ -21,7 +21,7 @@ DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
 OutputDir=..\dist
 OutputBaseFilename=InputLocker-Setup-v{#MyAppVersion}
-SetupIconFile=..\assets\icon.ico
+SetupIconFile=..\assets\app_icon.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

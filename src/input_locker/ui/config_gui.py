@@ -140,11 +140,22 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
 
     # Icon
     assets_dir = get_assets_dir()
-    ico_path = assets_dir / "icon.ico"
+    ico_path = assets_dir / "app_icon.ico"
+    if not ico_path.is_file():
+        ico_path = assets_dir / "icon.ico"
     logo_path = assets_dir / "logo.png"
     if ico_path.is_file():
         try:
             top.iconbitmap(str(ico_path))
+        except Exception:
+            pass
+
+    if logo_path.is_file():
+        try:
+            from PIL import Image, ImageTk
+            _about_ico = ImageTk.PhotoImage(Image.open(str(logo_path)).convert("RGBA"), master=top)
+            _refs.append(_about_ico)
+            top.wm_iconphoto(True, _about_ico)
         except Exception:
             pass
 
@@ -452,11 +463,22 @@ def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish
     _refs: list = []
 
     assets_dir = get_assets_dir()
-    ico_path = assets_dir / "icon.ico"
+    ico_path = assets_dir / "app_icon.ico"
+    if not ico_path.is_file():
+        ico_path = assets_dir / "icon.ico"
     logo_path = assets_dir / "logo.png"
     if ico_path.is_file():
         try:
             top.iconbitmap(str(ico_path))
+        except Exception:
+            pass
+
+    if logo_path.is_file():
+        try:
+            from PIL import Image, ImageTk
+            _tut_ico = ImageTk.PhotoImage(Image.open(str(logo_path)).convert("RGBA"), master=top)
+            _refs.append(_tut_ico)
+            top.wm_iconphoto(True, _tut_ico)
         except Exception:
             pass
 
@@ -647,7 +669,9 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
 
     # ── window icon & assets ──────────────────────────────────────────────
     assets_dir = get_assets_dir()
-    ico_path = assets_dir / "icon.ico"
+    ico_path = assets_dir / "app_icon.ico"
+    if not ico_path.is_file():
+        ico_path = assets_dir / "icon.ico"
     logo_path = assets_dir / "logo.png"
 
     if ico_path.is_file():
@@ -655,6 +679,16 @@ def show_config_dialog(config=None) -> Tuple[Optional[object], bool]:
             root.iconbitmap(str(ico_path))
         except Exception:
             pass
+
+    if logo_path.is_file():
+        try:
+            from PIL import Image, ImageTk
+            _ico_img = Image.open(str(logo_path)).convert("RGBA")
+            _tk_ico = ImageTk.PhotoImage(_ico_img, master=root)
+            _thumb_ref.append(_tk_ico)
+            root.wm_iconphoto(True, _tk_ico)
+        except Exception as exc:
+            logger.debug("Failed to set wm_iconphoto: %s", exc)
 
     # ── header bar ────────────────────────────────────────────────────────
     header = tk.Frame(root, bg=BG)
