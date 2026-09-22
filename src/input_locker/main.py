@@ -1,4 +1,4 @@
-"""CLI Launcher and Entry Point for Windows AV Staging Input Locker.
+﻿"""CLI Launcher and Entry Point for Windows AV Staging Input Locker.
 
 Provides options for overlay backend (win32 or pyqt), network control ports,
 daemon mode, and verbosity settings.
@@ -325,17 +325,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         # Main wait loop
         while not shutdown_event.is_set():
             if reopen_settings_event.is_set():
+                with open("debug_log.txt", "a") as f: f.write("reopen event is set\n")
                 reopen_settings_event.clear()
                 if not controller.is_locked:
                     from input_locker.core.single_instance import focus_existing_window
-                    if not focus_existing_window():
+                    f_res = focus_existing_window();
+                    with open("debug_log.txt", "a") as f: f.write(f"focus_res: {f_res}\n");
+                    if not f_res:
                         try:
                             from input_locker.ui.config_gui import show_config_dialog
                             cfg, _ = show_config_dialog(config=locker_cfg)
                             if cfg is not None:
                                 locker_cfg = cfg
                         except Exception as exc:
-                            logger.warning("Could not reopen settings: %s", exc)
+                            with open("error_log.txt", "w") as f: f.write(str(exc)); logger.warning("Could not reopen settings: %s", exc)
 
             time.sleep(0.1)
 

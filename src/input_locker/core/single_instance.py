@@ -76,7 +76,12 @@ def focus_existing_window() -> bool:
                 buf = ctypes.create_unicode_buffer(length + 1)
                 user32.GetWindowTextW(hwnd, buf, length + 1)
                 text = buf.value
-                if "Input Locker" in text and "Visual Studio Code" not in text:
+                
+                class_buf = ctypes.create_unicode_buffer(256)
+                user32.GetClassNameW(hwnd, class_buf, 256)
+                cls_name = class_buf.value
+                
+                if "Input Locker" in text and cls_name == "TkTopLevel":
                     found.append(hwnd)
             return True
 
