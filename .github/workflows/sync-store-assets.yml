@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Setup Executable from Release
         run: |
@@ -27,6 +28,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin store-assets:store-assets || git branch store-assets origin/store-assets
           git checkout store-assets
           cp -f InputLocker-Setup-v0.2.5.exe .
           git add InputLocker-Setup-v0.2.5.exe
