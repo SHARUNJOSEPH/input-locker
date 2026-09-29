@@ -8,7 +8,13 @@ for low-level Win32 hook evaluation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import Callable, Collection, Dict, List, Optional, Set
+
+try:
+    import ctypes
+    user32 = ctypes.windll.user32
+except Exception:
+    user32 = None
 
 # Virtual Key Codes
 VK_SHIFT = 0x10
@@ -83,9 +89,31 @@ class HotkeyBinding:
     raw_str: str = ""
 
     def matches(self, trigger_vk: int, active_keys: Set[int]) -> bool:
-        """Check if incoming key and currently held keys satisfy this binding."""
-        if trigger_vk != self.vk:
+        """Check if incoming key and currently held keys satisfy this binding.
+
+        Supports order-independent activation: triggers if trigger_vk is either the base
+        key or any of the required modifier keys, provided all required keys are currently held
+        in active_keys.
+        """
+        # Determine all keys valid for this combination
+        combo_keys: Set[int] = {self.vk}
+        if self.ctrl:
+            combo_keys.update(CTRL_KEYS)
+        if self.alt:
+            combo_keys.update(ALT_KEYS)
+        if self.shift:
+            combo_keys.update(SHIFT_KEYS)
+        if self.win:
+            combo_keys.update(WIN_KEYS)
+
+        # The current event's key must belong to this combination
+        if trigger_vk not in combo_keys:
             return False
+
+        # Base key must be pressed: either it is the current trigger or already held
+        if trigger_vk != self.vk:
+            if self.vk not in active_keys:
+                return False
 
         has_ctrl = bool(active_keys & CTRL_KEYS)
         has_alt = bool(active_keys & ALT_KEYS)

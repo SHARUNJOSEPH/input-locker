@@ -97,11 +97,16 @@ class TrayIcon:
     def _menu_check_updates(self, icon, item) -> None:
         def _on_result(update_info):
             from input_locker import __version__
-            if update_info:
+            if update_info and (update_info.get("has_update") or update_info.get("available")):
                 ver = update_info.get("latest_version", "")
                 self.notify(
                     "Update Available",
-                    f"A new version of Input Locker ({ver}) is available!\nVisit GitHub releases to download.",
+                    f"A new version of Input Locker ({ver}) is available!\nOpen Settings to update now.",
+                )
+            elif update_info and update_info.get("is_store"):
+                self.notify(
+                    "Microsoft Store Edition",
+                    "Updates are managed automatically by the Microsoft Store.",
                 )
             else:
                 self.notify(

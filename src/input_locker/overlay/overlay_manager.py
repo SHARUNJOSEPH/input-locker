@@ -38,6 +38,7 @@ class OverlayManager:
         alpha: int = 120,
         auto_prewarm: bool = True,
         wallpaper: str = "",
+        unlock_hotkey: str = "Ctrl+Alt+Shift+U",
     ) -> None:
         """Initialize the OverlayManager.
 
@@ -46,9 +47,11 @@ class OverlayManager:
             alpha: Transparency alpha (0-255). Default 120 (~47% tint).
             auto_prewarm: Whether to immediately pre-create the hidden overlay window.
             wallpaper: Optional absolute path to a wallpaper image for the lock screen.
+            unlock_hotkey: Hotkey string to display on lock overlay badge.
         """
         self.backend_name = backend.lower()
         self.alpha = alpha
+        self.unlock_hotkey = unlock_hotkey
         self._lock = threading.Lock()
 
         # Instantiate cursor guard with fail-safe atexit release
@@ -61,10 +64,20 @@ class OverlayManager:
                 self.overlay = Win32Overlay(alpha=self.alpha, auto_prewarm=auto_prewarm)
                 self.backend_name = "win32"
             else:
-                self.overlay = PyQtOverlay(auto_prewarm=auto_prewarm, wallpaper_path=wallpaper)
+                self.overlay = PyQtOverlay(
+                    auto_prewarm=auto_prewarm,
+                    wallpaper_path=wallpaper,
+                    unlock_hotkey=unlock_hotkey,
+                )
         else:
             self.overlay = Win32Overlay(alpha=self.alpha, auto_prewarm=auto_prewarm)
             self.backend_name = "win32"
+
+    def set_unlock_hotkey(self, hotkey: str) -> None:
+        """Dynamically update unlock hotkey for overlay badge display."""
+        self.unlock_hotkey = hotkey
+        if hasattr(self.overlay, "set_unlock_hotkey"):
+            self.overlay.set_unlock_hotkey(hotkey)
 
     def prewarm(self) -> None:
         """Pre-creates the overlay window(s) in hidden state to eliminate show latency."""

@@ -42,9 +42,11 @@ class _ScreenOverlayWidget(QWidget):
         badge_title: str = "INPUT LOCKER ACTIVE",
         badge_subtitle: str = "Background media engines running • Input swallowed",
         wallpaper_path: str = "",
+        unlock_hotkey: str = "Ctrl+Alt+Shift+U",
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
+        self.unlock_hotkey = unlock_hotkey
         self.setScreen(screen)
         self.setGeometry(screen.geometry())
 
@@ -144,7 +146,32 @@ class _ScreenOverlayWidget(QWidget):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         badge_layout.addWidget(title_label)
 
+        self._hotkey_label = QLabel(f"Press {self.unlock_hotkey} to Unlock", badge)
+        self._hotkey_label.setStyleSheet(
+            """
+            QLabel {
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 13px;
+                font-weight: 600;
+                color: #38BDF8;
+                letter-spacing: 0.5px;
+                background: rgba(14, 165, 233, 0.12);
+                border: 1px solid rgba(56, 189, 248, 0.3);
+                border-radius: 8px;
+                padding: 5px 16px;
+            }
+            """
+        )
+        self._hotkey_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge_layout.addWidget(self._hotkey_label)
+
         root_layout.addWidget(badge)
+
+    def set_unlock_hotkey(self, hotkey: str) -> None:
+        """Update displayed unlock hotkey dynamically."""
+        self.unlock_hotkey = hotkey
+        if hasattr(self, "_hotkey_label"):
+            self._hotkey_label.setText(f"Press {self.unlock_hotkey} to Unlock")
 
 
 _user32 = ctypes.windll.user32
@@ -231,6 +258,7 @@ class PyQtOverlay:
         badge_title: str = "INPUT LOCKER ACTIVE",
         badge_subtitle: str = "Background media engines running • Input swallowed",
         wallpaper_path: str = "",
+        unlock_hotkey: str = "Ctrl+Alt+Shift+U",
     ) -> None:
         if not PYQT6_AVAILABLE:
             raise RuntimeError("PyQt6 is not installed in the current Python environment")
@@ -238,6 +266,7 @@ class PyQtOverlay:
         self.badge_title    = badge_title
         self.badge_subtitle = badge_subtitle
         self.wallpaper_path = wallpaper_path
+        self.unlock_hotkey  = unlock_hotkey
 
         self._widgets: List[_ScreenOverlayWidget] = []
         self._bridge: Optional[_OverlayBridge] = None
@@ -248,6 +277,12 @@ class PyQtOverlay:
 
         if auto_prewarm:
             self.prewarm()
+
+    def set_unlock_hotkey(self, hotkey: str) -> None:
+        """Dynamically update unlock hotkey display across all overlay widgets."""
+        self.unlock_hotkey = hotkey
+        for w in self._widgets:
+            w.set_unlock_hotkey(hotkey)
 
     def _worker_thread(self) -> None:
         """Background thread hosting QApplication and overlay widgets."""
@@ -269,6 +304,7 @@ class PyQtOverlay:
             w = _ScreenOverlayWidget(
                 screen=target_screen,
                 wallpaper_path=self.wallpaper_path,
+                unlock_hotkey=self.unlock_hotkey,
             )
             w.hide()
             self._widgets.append(w)

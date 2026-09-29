@@ -282,3 +282,65 @@ class TestModifierCombosBoundary:
         time.sleep(0.05)
 
         focus_harness.assert_zero_input_received(category="keyboard")
+
+    def test_order_independent_u_before_shift(self, test_controller: TestController):
+        """Verify pressing U before the final modifier (Ctrl, Alt, U, Shift) unlocks cleanly."""
+        test_controller.lock()
+        assert test_controller.is_locked
+
+        downs = [
+            InputInjector.make_key_input(InputInjector.VK_CONTROL),
+            InputInjector.make_key_input(InputInjector.VK_MENU),
+            InputInjector.make_key_input(InputInjector.VK_U),
+            InputInjector.make_key_input(InputInjector.VK_SHIFT),
+        ]
+        InputInjector.send_inputs(downs)
+        time.sleep(0.01)
+
+        ups = [
+            InputInjector.make_key_input(InputInjector.VK_SHIFT, InputInjector.KEYEVENTF_KEYUP),
+            InputInjector.make_key_input(InputInjector.VK_U, InputInjector.KEYEVENTF_KEYUP),
+            InputInjector.make_key_input(InputInjector.VK_MENU, InputInjector.KEYEVENTF_KEYUP),
+            InputInjector.make_key_input(InputInjector.VK_CONTROL, InputInjector.KEYEVENTF_KEYUP),
+        ]
+        InputInjector.send_inputs(ups)
+        time.sleep(0.05)
+
+        assert not test_controller.is_locked, "Failed to unlock when U was actuated before Shift!"
+
+    def test_order_independent_u_first(self, test_controller: TestController):
+        """Verify pressing U first, then holding modifiers (U, Ctrl, Alt, Shift) unlocks cleanly."""
+        test_controller.lock()
+        assert test_controller.is_locked
+
+        downs = [
+            InputInjector.make_key_input(InputInjector.VK_U),
+            InputInjector.make_key_input(InputInjector.VK_CONTROL),
+            InputInjector.make_key_input(InputInjector.VK_MENU),
+            InputInjector.make_key_input(InputInjector.VK_SHIFT),
+        ]
+        InputInjector.send_inputs(downs)
+        time.sleep(0.01)
+
+        ups = [
+            InputInjector.make_key_input(InputInjector.VK_SHIFT, InputInjector.KEYEVENTF_KEYUP),
+            InputInjector.make_key_input(InputInjector.VK_MENU, InputInjector.KEYEVENTF_KEYUP),
+            InputInjector.make_key_input(InputInjector.VK_CONTROL, InputInjector.KEYEVENTF_KEYUP),
+            InputInjector.make_key_input(InputInjector.VK_U, InputInjector.KEYEVENTF_KEYUP),
+        ]
+        InputInjector.send_inputs(ups)
+        time.sleep(0.05)
+
+        assert not test_controller.is_locked, "Failed to unlock when U was held first!"
+
+    def test_emergency_rapid_escape_unlock(self, test_controller: TestController):
+        """Verify tapping Escape 4 times within 1.5 seconds triggers failsafe unlock."""
+        test_controller.lock()
+        assert test_controller.is_locked
+
+        for _ in range(4):
+            InputInjector.press_key(InputInjector.VK_ESCAPE, duration_s=0.01)
+            time.sleep(0.02)
+
+        time.sleep(0.05)
+        assert not test_controller.is_locked, "Failed to unlock via 4x Escape emergency sequence!"

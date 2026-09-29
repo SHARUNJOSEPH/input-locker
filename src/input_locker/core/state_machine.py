@@ -92,9 +92,14 @@ class StateMachine:
             return self._state
 
     def is_locked(self) -> bool:
-        """Return True if currently in LOCKED state."""
+        """Return True if the system is locked or in the process of unlocking.
+
+        The UNLOCKING state is included because the system is still logically
+        locked during that transition — inputs remain swallowed until UNLOCKED
+        is reached.  Only UNLOCKED (and LOCKING-has-not-yet-activated) is False.
+        """
         with self._lock:
-            return self._state == LockerState.LOCKED
+            return self._state in (LockerState.LOCKED, LockerState.UNLOCKING)
 
     def is_unlocked(self) -> bool:
         """Return True if currently in UNLOCKED state."""

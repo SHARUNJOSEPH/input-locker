@@ -11,6 +11,7 @@ import ctypes
 from ctypes import wintypes
 import logging
 import threading
+import time
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -87,10 +88,14 @@ class CursorGuard:
 
     def _ensure_input_desktop(self) -> bool:
         """Attaches calling thread to active input desktop if necessary."""
+        if getattr(self, "_desktop_attached", False):
+            return True
         try:
             hdesk = self._user32.OpenInputDesktop(0, False, DESKTOP_ALL)
             if hdesk:
                 success = bool(self._user32.SetThreadDesktop(hdesk))
+                if success:
+                    self._desktop_attached = True
                 # Note: We do not call CloseDesktop on a desktop handle currently in use by the thread
                 return success
         except Exception as exc:

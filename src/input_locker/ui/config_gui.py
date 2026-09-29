@@ -16,6 +16,7 @@ from input_locker import __version__
 from input_locker.config import LockerConfig, get_assets_dir, get_config_path
 from input_locker.core.i18n import SUPPORTED_LANGUAGES, set_locale, t
 from input_locker.hooks.hotkey import parse_hotkey
+from input_locker.ui.update_dialog import show_software_update_dialog
 from input_locker.updater import check_for_updates_async
 
 logger = logging.getLogger(__name__)
@@ -328,24 +329,7 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     up_sub.pack(anchor="w", pady=(2, 0))
 
     def _check_modal():
-        up_btn.config(text=t("btn_checking"), state="disabled")
-        def _cb(info):
-            def _ui():
-                up_btn.config(text=t("btn_check_updates"), state="normal")
-                if info and info.get("available"):
-                    up_sub.config(text=t("about_update_avail", version=info.get('latest_version')), fg="#38BDF8")
-                    if messagebox.askyesno(
-                        "Update Available",
-                        f"Input Locker {info.get('latest_version')} is available.\n\nOpen release download page?",
-                        parent=top,
-                    ):
-                        webbrowser.open(info.get("release_url", APP_RELEASES))
-                else:
-                    up_sub.config(text=f"v{__version__} — {t('about_up_to_date', version=__version__)}", fg=SUCCESS_TEXT)
-                    messagebox.showinfo("Up to Date", t("about_up_to_date", version=__version__), parent=top)
-            if top.winfo_exists():
-                top.after(0, _ui)
-        check_for_updates_async(callback=_cb)
+        show_software_update_dialog(parent=top, auto_check=True)
 
     up_btn = tk.Button(
         up_row, text=t("btn_check_updates"), command=_check_modal,
@@ -741,23 +725,9 @@ def show_config_dialog(
         show_tutorial_dialog(parent=root)
 
     def manual_check_updates():
-        check_btn.config(text=t("btn_checking"), state="disabled")
-        def _on_manual_result(info: Optional[dict]):
-            def _ui():
-                check_btn.config(text=t("btn_check_updates"), state="normal")
-                if info and info.get("available"):
-                    on_update_found(info)
-                else:
-                    messagebox.showinfo(
-                        "Update Status",
-                        f"Input Locker v{__version__} is up to date.\nNo newer version found.",
-                        parent=root,
-                    )
-            if root.winfo_exists():
-                root.after(0, _ui)
-
-        check_for_updates_async(
-            callback=_on_manual_result,
+        show_software_update_dialog(
+            parent=root,
+            auto_check=True,
             repo_or_url=getattr(cfg, "update_repo", ""),
         )
 
@@ -838,8 +808,24 @@ def show_config_dialog(
     def on_update_found(info: Optional[dict]) -> None:
         if not info or not root.winfo_exists():
             return
+        if not info.get("has_update") and not info.get("available"):
+            return
         ver = info.get("latest_version", "")
-        url = info.get("release_url", "https://github.com/SHARUNJOSEPH/input-locker/releases/latest")
+
+        def _open_updater():
+            show_software_update_dialog(
+                parent=root,
+                update_info=info,
+                repo_or_url=getattr(cfg, "update_repo", ""),
+            )
+
+        # Prominently highlight top header update button
+        check_btn.config(
+            text="⬇️ Update Available",
+            bg="#0284C7", fg="#FFFFFF", activebackground="#0369A1", activeforeground="#FFFFFF",
+            font=("Segoe UI", 9, "bold"),
+            command=_open_updater,
+        )
 
         for child in update_banner.winfo_children():
             child.destroy()
@@ -848,16 +834,15 @@ def show_config_dialog(
             update_banner,
             text=f"📢 Update Available: {ver}! A newer release is ready.",
             bg=BANNER_BG, fg="#E0F2FE", font=("Segoe UI", 9, "bold"),
+            cursor="hand2",
         )
         b_lbl.pack(side="left", padx=(12, 8), pady=7)
-
-        def open_url():
-            webbrowser.open(url)
+        b_lbl.bind("<Button-1>", lambda e: _open_updater())
 
         dl_btn = tk.Button(
-            update_banner, text="Download", command=open_url,
-            bg="#2563EB", fg="#FFFFFF", activebackground="#3B82F6",
-            relief="flat", bd=0, padx=10, pady=3,
+            update_banner, text="Update Now", command=_open_updater,
+            bg="#2563EB", fg="#FFFFFF", activebackground="#3B82F6", activeforeground="#FFFFFF",
+            relief="flat", bd=0, padx=12, pady=4,
             font=("Segoe UI", 9, "bold"), cursor="hand2",
         )
         dl_btn.pack(side="left", padx=4, pady=7)
@@ -1311,12 +1296,7 @@ def show_config_dialog(
             import ctypes
             user32 = ctypes.windll.user32
             user32.ClipCursor(None)
-            while user32.ShowCursor(True) < 0:
-                pass
-            IDC_ARROW = 32512
-            h_cur = user32.LoadCursorW(None, IDC_ARROW)
-            if h_cur:
-                user32.SetCursor(h_cur)
+            user32.ShowCursor(True)
         except Exception:
             pass
 
@@ -1421,8 +1401,6 @@ def show_config_dialog(
     # ── Reveal Window ─────────────────────────────────────────────────────
     _force_restore_mouse()
     root.config(cursor="arrow")
-    root.bind("<Enter>", _force_restore_mouse, add="+")
-    root.bind("<FocusIn>", _force_restore_mouse, add="+")
     root.update_idletasks()
     W = 620
     sx = root.winfo_screenwidth()
@@ -1435,7 +1413,6 @@ def show_config_dialog(
     root.attributes("-topmost", True)
     root.after(200, lambda: root.attributes("-topmost", False) if root.winfo_exists() else None)
     root.focus_force()
-    root.after(50, _force_restore_mouse)
 
     # ── Auto-show tutorial for first-run users ────────────────────────────
     if getattr(cfg, "first_run", True):

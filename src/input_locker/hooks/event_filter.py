@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import time
 from typing import Any, Callable, Collection, Iterable, Optional, Set
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,8 @@ class EventFilter:
 
         self._active_keys: Set[int] = set()
         self._pending_unlock_keyups: Set[int] = set()
+        self._pending_unlock_time: float = 0.0
+        self._esc_press_times: List[float] = []
         self._keyboard_listener: Any = None
         self._mouse_listener: Any = None
 
@@ -153,6 +156,18 @@ class EventFilter:
         self._password_mode = bool(active)
         logger.debug("EventFilter password_mode set to %s", self._password_mode)
 
+    def _reset_system_modifiers(self) -> None:
+        """Synthesize KEYUP for modifier keys to guarantee no sticky modifier in Windows OS."""
+        if not HAS_USER32 or user32 is None:
+            return
+        try:
+            KEYEVENTF_KEYUP = 0x0002
+            for mod_vk in (0x11, 0x12, 0x10, 0x5B, 0x5C):
+                if user32.GetAsyncKeyState(mod_vk) & 0x8000:
+                    user32.keybd_event(mod_vk, 0, KEYEVENTF_KEYUP, 0)
+        except Exception as exc:
+            logger.debug("Error releasing system modifiers: %s", exc)
+
     def set_swallow(self, active: bool) -> None:
         """Atomically toggle swallowing state.
         
@@ -163,6 +178,8 @@ class EventFilter:
         if not self._swallow_active:
             # Clear tracked keys on unlock transition to prevent stuck modifiers
             self._active_keys.clear()
+            self._esc_press_times.clear()
+            self._reset_system_modifiers()
 
     def is_swallowing(self) -> bool:
         """Return True if currently swallowing inputs."""
@@ -241,11 +258,30 @@ class EventFilter:
             else:
                 return True
 
+
         is_down = msg in (WM_KEYDOWN, WM_SYSKEYDOWN)
         is_up = msg in (WM_KEYUP, WM_SYSKEYUP)
 
         if is_down:
-            self._active_keys.add(vk)
+            if self._swallow_active:
+                self._active_keys.add(vk)
+            else:
+                # When unlocked, ONLY track modifiers and the lock trigger key.
+                # Never track regular typing keys so active_keys is never polluted with stale keys!
+                if (
+                    vk in CTRL_KEYS
+                    or vk in ALT_KEYS
+                    or vk in SHIFT_KEYS
+                    or vk in WIN_KEYS
+                    or vk == self._lock_binding.vk
+                ):
+                    self._active_keys.add(vk)
+                # Clear any expired pending keyups when user types normal keys
+                if self._pending_unlock_keyups and (
+                    time.monotonic() - self._pending_unlock_time > 1.0
+                    or vk not in (CTRL_KEYS | ALT_KEYS | SHIFT_KEYS | WIN_KEYS)
+                ):
+                    self._pending_unlock_keyups.clear()
         elif is_up:
             self._active_keys.discard(vk)
             # Clear entire modifier family on any modifier keyup to prevent sticky state
@@ -255,26 +291,31 @@ class EventFilter:
                 self._active_keys.difference_update(ALT_KEYS)
             elif vk in SHIFT_KEYS:
                 self._active_keys.difference_update(SHIFT_KEYS)
+            elif vk in WIN_KEYS:
+                self._active_keys.difference_update(WIN_KEYS)
 
         # Check for pending unlock keyups: swallow release of combo/modifier keys
         # even after the state machine has unlocked (swallow_active == False).
         is_pending_keyup = False
         if is_up and self._pending_unlock_keyups:
-            if vk in self._pending_unlock_keyups:
-                self._pending_unlock_keyups.discard(vk)
-                is_pending_keyup = True
-            if vk in CTRL_KEYS:
-                if bool(self._pending_unlock_keyups & CTRL_KEYS):
-                    self._pending_unlock_keyups.difference_update(CTRL_KEYS)
+            if time.monotonic() - self._pending_unlock_time > 1.0:
+                self._pending_unlock_keyups.clear()
+            else:
+                if vk in self._pending_unlock_keyups:
+                    self._pending_unlock_keyups.discard(vk)
                     is_pending_keyup = True
-            elif vk in ALT_KEYS:
-                if bool(self._pending_unlock_keyups & ALT_KEYS):
-                    self._pending_unlock_keyups.difference_update(ALT_KEYS)
-                    is_pending_keyup = True
-            elif vk in SHIFT_KEYS:
-                if bool(self._pending_unlock_keyups & SHIFT_KEYS):
-                    self._pending_unlock_keyups.difference_update(SHIFT_KEYS)
-                    is_pending_keyup = True
+                if vk in CTRL_KEYS:
+                    if bool(self._pending_unlock_keyups & CTRL_KEYS):
+                        self._pending_unlock_keyups.difference_update(CTRL_KEYS)
+                        is_pending_keyup = True
+                elif vk in ALT_KEYS:
+                    if bool(self._pending_unlock_keyups & ALT_KEYS):
+                        self._pending_unlock_keyups.difference_update(ALT_KEYS)
+                        is_pending_keyup = True
+                elif vk in SHIFT_KEYS:
+                    if bool(self._pending_unlock_keyups & SHIFT_KEYS):
+                        self._pending_unlock_keyups.difference_update(SHIFT_KEYS)
+                        is_pending_keyup = True
 
         # 1. Hotkey Detection: Lock Hotkey (Dynamic binding)
         if self._lock_binding.matches(vk, self._active_keys) and is_down:
@@ -284,14 +325,18 @@ class EventFilter:
                 except Exception as exc:
                     logger.error("Error executing on_lock_hotkey: %s", exc, exc_info=True)
 
-        # 2. Hotkey Detection: Unlock Combo (Dynamic binding)
+        # 2. Hotkey Detection: Unlock Combo (Dynamic binding & order-independent)
+        # CRITICAL: ONLY evaluate unlock combo when actually LOCKED (self._swallow_active == True)!
+        # When unlocked, unlock hotkey must NEVER match, swallow, or populate pending keyups!
         is_unlock_combo = False
-        if self._unlock_binding.matches(vk, self._active_keys) and is_down:
+        if self._swallow_active and self._unlock_binding.matches(vk, self._active_keys) and is_down:
             is_unlock_combo = True
+            self._pending_unlock_time = time.monotonic()
 
             # Record currently held keys and all modifier variants for post-unlock swallowing
             self._pending_unlock_keyups.update(self._active_keys)
             self._pending_unlock_keyups.add(vk)
+            self._pending_unlock_keyups.add(self._unlock_binding.vk)
             if self._unlock_binding.ctrl:
                 self._pending_unlock_keyups.update(CTRL_KEYS)
             if self._unlock_binding.alt:
@@ -306,6 +351,22 @@ class EventFilter:
                     self._on_unlock_hotkey()
                 except Exception as exc:
                     logger.error("Error executing on_unlock_hotkey: %s", exc, exc_info=True)
+
+        # 2b. Emergency Failsafe: 4 rapid Esc taps within 1.5s while locked
+        if self._swallow_active and is_down and vk == 0x1B:
+            now = time.monotonic()
+            self._esc_press_times.append(now)
+            self._esc_press_times = [t for t in self._esc_press_times if now - t <= 1.5]
+            if len(self._esc_press_times) >= 4:
+                logger.info("Emergency unlock triggered via rapid Esc sequence (4 taps)")
+                is_unlock_combo = True
+                self._esc_press_times.clear()
+                self._pending_unlock_keyups.add(0x1B)
+                if self._on_unlock_hotkey is not None:
+                    try:
+                        self._on_unlock_hotkey()
+                    except Exception as exc:
+                        logger.error("Error executing emergency unlock: %s", exc, exc_info=True)
 
         # In password entry mode, suppress system task-switching shortcuts so background apps cannot be accessed
         is_task_switch = False
@@ -345,8 +406,8 @@ class EventFilter:
         # - When unlock combo is pressed, it must be swallowed so keys don't leak
         # - Subsequent keyups from the unlock combo are swallowed even if swallow_active is False
         is_lock_swallow = (
-            (vk == self._lock_binding.vk and (not self._lock_binding.ctrl or bool(self._active_keys & CTRL_KEYS)))
-            or self._lock_binding.matches(vk, self._active_keys)
+            (self._lock_binding.matches(vk, self._active_keys) and is_down)
+            or (vk == self._lock_binding.vk and is_up)
         )
         should_swallow = (
             self._swallow_active
