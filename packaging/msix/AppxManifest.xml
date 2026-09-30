@@ -6,14 +6,14 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="JosephSharun.InputLocker"
-    Publisher="CN=Joseph Sharun, O=Joseph Sharun, L=Dubai, C=AE"
+    Name="JOSEPHSHARUN.InputLocker"
+    Publisher="CN=551A075B-7286-4B87-A119-02586E46BABD"
     Version="0.2.5.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>Input Locker</DisplayName>
-    <PublisherDisplayName>Joseph Sharun</PublisherDisplayName>
+    <PublisherDisplayName>JOSEPH SHARUN</PublisherDisplayName>
     <Logo>assets\store\StoreLogo.png</Logo>
     <Description>High-performance zero-latency Windows AV staging lock and global input interception utility for live production and events.</Description>
   </Properties>
