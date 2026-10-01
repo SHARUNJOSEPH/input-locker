@@ -34,7 +34,9 @@ jobs:
       - name: Create Release Zip Package
         shell: pwsh
         run: |
+          $tag = $env:GITHUB_REF_NAME
           Compress-Archive -Path dist/InputLocker.exe -DestinationPath dist/InputLocker-Windows-x64.zip
+          Copy-Item dist/InputLocker-Windows-x64.zip "dist/InputLocker-$tag-Windows-x64.zip"
 
       - name: Install Inno Setup
         run: |
@@ -47,7 +49,8 @@ jobs:
           if (-not (Test-Path $iscc)) {
             $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
           }
-          & $iscc installer\input_locker_setup.iss
+          $tagVersion = $env:GITHUB_REF_NAME.TrimStart('v')
+          & $iscc "/DMyAppVersion=$tagVersion" installer\input_locker_setup.iss
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -55,6 +58,7 @@ jobs:
           files: |
             dist/InputLocker.exe
             dist/InputLocker-Windows-x64.zip
+            dist/InputLocker-*-Windows-x64.zip
             dist/InputLocker-Setup-v*.exe
           draft: false
           prerelease: false

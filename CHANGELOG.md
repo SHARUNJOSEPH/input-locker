@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.6] - 2026-10-01
+
+### Added
+- **Explicit "Save Changes" Button**: Added a prominent "Save Changes" button with green toast notification feedback to the Settings UI across all 7 supported languages.
+- **Dynamic Wallpaper Switching**: Added thread-safe `set_wallpaper` pipeline through `PyQtOverlay`, `OverlayBridge`, and `OverlayManager` to apply lock screen wallpaper updates immediately without restarting the app.
+- **Dynamic Settings Sync Unit Tests**: Added comprehensive test suite (`tests/unit/test_settings_sync.py`) validating wallpaper and password hot-reloading.
+
+### Fixed
+- **Settings & Wallpaper Persistence**: Fixed bug where wallpaper changes in Settings did not update the live lock screen overlay or save across sessions.
+- **Password Persistence**: Resolved password update flow ensuring hashes and salts are written and retained correctly.
+- **Dialog Auto-Save**: Settings automatically save on dialog close in companion mode, and reload fresh state upon re-opening.
+
+---
+
+## [0.2.5] - 2026-09-29
+
+### Added
+- **Microsoft Store Identity Alignment**: Synchronized AppxManifest with official Microsoft Store Publisher and Package Family Name.
+- **Packaging Pipeline Enhancements**: MSIX bundling and multi-monitor overlay hardening.
+
+---
+
 ## [0.2.4] - 2026-09-22
 
 ### Added
