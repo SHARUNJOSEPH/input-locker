@@ -748,15 +748,22 @@ def show_config_dialog(
     btn_row = tk.Frame(root, bg=BG)
     btn_row.pack(side="bottom", fill="x", padx=18, pady=(10, 14))
 
-    cancel_btn = btn(btn_row, t("btn_cancel"), lambda: cancel())
+    cancel_btn = btn(btn_row, t("btn_close") if not standalone else t("btn_cancel"), lambda: cancel())
     cancel_btn.pack(side="left")
+
+    save_toast_lbl = tk.Label(btn_row, text="", bg=BG, fg="#34D399", font=("Segoe UI", 9, "bold"))
+    save_toast_lbl.pack(side="left", padx=12)
+
+    bottom_lock_btn = btn(btn_row, f"  {t('btn_lock_now')}  ", lambda: save_and_lock())
+    bottom_lock_btn.pack(side="right")
+
+    save_btn = btn(btn_row, f"  💾 {t('btn_save_changes')}  ", lambda: save_settings(stay_open=not standalone), primary=True)
+    save_btn.pack(side="right", padx=(0, 8))
 
     initial_lk = getattr(cfg, 'lock_hotkey', 'F11')
     run_bg_btn = btn(btn_row, t("btn_run_background", hotkey=initial_lk), lambda: run_in_background())
-    run_bg_btn.pack(side="left", padx=8)
-
-    bottom_lock_btn = btn(btn_row, f"  {t('btn_lock_now')}  ", lambda: save_and_lock(), primary=True)
-    bottom_lock_btn.pack(side="right")
+    if standalone:
+        run_bg_btn.pack(side="right", padx=(0, 8))
 
     # ── Scrollable Card Viewport (fills all middle space) ─────────────────
     scroll_container = tk.Frame(root, bg=BG)
@@ -1013,16 +1020,43 @@ def show_config_dialog(
     if cfg.password:
         pw_e.insert(0, cfg.password)
 
+    btn_remove_pw = None
+
     def do_clear_password():
         pw_cleared[0] = True
         pw_e.delete(0, tk.END)
         pw2_e.delete(0, tk.END)
-        status_pill.config(
-            text=t("badge_password_removed"),
-            bg="#374151", fg="#F59E0B",
-        )
+        err_lbl.config(text="")
+        update_pw_ui(False, is_cleared=True)
 
-    btn_remove_pw = None
+    def update_pw_ui(has_pw: bool, is_cleared: bool = False):
+        nonlocal btn_remove_pw
+        if is_cleared:
+            status_pill.config(
+                text=t("badge_password_removed"),
+                bg="#374151", fg="#F59E0B",
+            )
+        else:
+            status_pill.config(
+                text=t("badge_password_protected") if has_pw else t("badge_no_password"),
+                bg=SUCCESS_BG if has_pw else "#1E293B",
+                fg=SUCCESS_TEXT if has_pw else TEXT_MUTED,
+            )
+        pw_entry_lbl.config(
+            text=t("label_unlock_password") + (" (Leave blank to keep saved)" if has_pw else "")
+        )
+        pw_confirm_lbl.config(
+            text=t("label_confirm_password") + (" (Leave blank to keep saved)" if has_pw else "")
+        )
+        if has_pw and not is_cleared:
+            if btn_remove_pw is None or not btn_remove_pw.winfo_exists():
+                btn_remove_pw = btn(pw_row_entry, t("btn_remove_password"), do_clear_password, danger=True)
+                btn_remove_pw.pack(side="left", padx=(8, 0))
+        else:
+            if btn_remove_pw is not None and btn_remove_pw.winfo_exists():
+                btn_remove_pw.destroy()
+                btn_remove_pw = None
+
     if has_saved_pw:
         btn_remove_pw = btn(pw_row_entry, t("btn_remove_password"), do_clear_password, danger=True)
         btn_remove_pw.pack(side="left", padx=(8, 0))
@@ -1034,6 +1068,18 @@ def show_config_dialog(
     pw2_e.pack(fill="x", padx=10, ipady=4)
     if cfg.password:
         pw2_e.insert(0, cfg.password)
+
+    def _on_pw_type(*_):
+        err_lbl.config(text="")
+        if pw_e.get() or pw2_e.get():
+            pw_cleared[0] = False
+            status_pill.config(
+                text=t("badge_password_protected"),
+                bg=SUCCESS_BG, fg=SUCCESS_TEXT,
+            )
+
+    pw_e.bind("<KeyRelease>", _on_pw_type)
+    pw2_e.bind("<KeyRelease>", _on_pw_type)
 
     err_lbl = tk.Label(pw_card, text="", bg=CARD_BG, fg=DANGER_TEXT, font=("Segoe UI", 8))
     err_lbl.pack(anchor="w", padx=10, pady=(2, 0))
@@ -1093,7 +1139,8 @@ def show_config_dialog(
         lock_guide_lbl.config(text=lk)
         unlock_guide_lbl.config(text=ulk)
         guide_sub_lbl.config(text=t("guide_unlock_instruction", hotkey=ulk))
-        run_bg_btn.config(text=t("btn_run_background", hotkey=lk))
+        if standalone and run_bg_btn and run_bg_btn.winfo_exists():
+            run_bg_btn.config(text=t("btn_run_background", hotkey=lk))
 
     lock_hk_var.trace_add("write", update_guide_badges)
     unlock_hk_var.trace_add("write", update_guide_badges)
@@ -1228,16 +1275,14 @@ def show_config_dialog(
         pref_lang_lbl.config(text=t("label_language"))
         chk.config(text=t("chk_auto_updates"))
 
-        cancel_btn.config(text=t("btn_cancel"))
-        run_bg_btn.config(text=t("btn_run_background", hotkey=lock_hk_var.get().strip() or "F11"))
+        cancel_btn.config(text=t("btn_close") if not standalone else t("btn_cancel"))
+        save_btn.config(text=f"  💾 {t('btn_save_changes')}  ")
         bottom_lock_btn.config(text=f"  {t('btn_lock_now')}  ")
+        if standalone and run_bg_btn and run_bg_btn.winfo_exists():
+            run_bg_btn.config(text=t("btn_run_background", hotkey=lock_hk_var.get().strip() or "F11"))
 
         has_pw = bool(pw_e.get() or cfg.password or cfg.password_hash) and not pw_cleared[0]
-        status_pill.config(
-            text=t("badge_password_protected") if has_pw else t("badge_no_password"),
-            bg=SUCCESS_BG if has_pw else "#1E293B",
-            fg=SUCCESS_TEXT if has_pw else TEXT_MUTED,
-        )
+        update_pw_ui(has_pw)
         refresh_thumb()
 
     # ── Validation & Config Building ──────────────────────────────────────
@@ -1246,6 +1291,8 @@ def show_config_dialog(
         wp = wp_var.get().strip()
         if pw != pw2:
             err_lbl.config(text=t("err_password_mismatch"))
+            messagebox.showerror("Password Mismatch", t("err_password_mismatch"), parent=root)
+            pw2_e.focus_set()
             return False
         if wp and not Path(wp).is_file():
             messagebox.showerror("Invalid Wallpaper", t("err_invalid_wallpaper", path=wp), parent=root)
@@ -1291,6 +1338,80 @@ def show_config_dialog(
             new_cfg.password_salt = cfg.password_salt
         return new_cfg
 
+    def _update_dialog_state(new_cfg: LockerConfig):
+        nonlocal cfg, has_saved_pw
+        cfg = new_cfg
+        has_saved_pw = bool(new_cfg.password or new_cfg.password_hash)
+        pw_cleared[0] = False
+        pw_e.delete(0, tk.END)
+        pw2_e.delete(0, tk.END)
+        err_lbl.config(text="")
+        update_pw_ui(has_saved_pw)
+        refresh_thumb()
+
+    def _has_unsaved_changes() -> bool:
+        if wp_var.get().strip() != (cfg.wallpaper or ""):
+            return True
+        if pw_cleared[0]:
+            return True
+        if pw_e.get():
+            return True
+        if lock_hk_var.get().strip() != (cfg.lock_hotkey or "F11"):
+            return True
+        if unlock_hk_var.get().strip() != (cfg.unlock_hotkey or "Ctrl+Alt+Shift+U"):
+            return True
+        if audio_feedback_var.get() != bool(getattr(cfg, "audio_feedback", False)):
+            return True
+        if check_updates_var.get() != bool(getattr(cfg, "check_updates", True)):
+            return True
+        if current_lang_var.get() != getattr(cfg, "language", "auto"):
+            return True
+        return False
+
+    def save_settings(stay_open: bool = True) -> bool:
+        if not validate():
+            return False
+        new_cfg = build_config(lock_on_launch=getattr(cfg, "lock_on_launch", False))
+        new_cfg.save()
+        _update_dialog_state(new_cfg)
+        result["config"] = new_cfg
+        result["launch"] = True
+
+        if on_save:
+            try:
+                on_save(new_cfg)
+            except Exception as exc:
+                logger.error("Error in on_save: %s", exc)
+
+        save_toast_lbl.config(text=t("toast_saved_success"))
+        root.after(3500, lambda: save_toast_lbl.config(text="") if root.winfo_exists() else None)
+
+        if not stay_open:
+            if standalone:
+                root.destroy()
+            else:
+                hide_window()
+                if on_hide:
+                    on_hide()
+        return True
+
+    def sync_ui_from_config(source_cfg: LockerConfig):
+        nonlocal cfg, has_saved_pw
+        cfg = source_cfg
+        wp_var.set(source_cfg.wallpaper or "")
+        lock_hk_var.set(source_cfg.lock_hotkey or "F11")
+        unlock_hk_var.set(source_cfg.unlock_hotkey or "Ctrl+Alt+Shift+U")
+        audio_feedback_var.set(bool(getattr(source_cfg, "audio_feedback", False)))
+        check_updates_var.set(bool(getattr(source_cfg, "check_updates", True)))
+        has_saved_pw = bool(source_cfg.password or source_cfg.password_hash)
+        pw_cleared[0] = False
+        pw_e.delete(0, tk.END)
+        pw2_e.delete(0, tk.END)
+        err_lbl.config(text="")
+        update_pw_ui(has_saved_pw)
+        refresh_thumb()
+        save_toast_lbl.config(text="")
+
     def _force_restore_mouse(event=None):
         try:
             import ctypes
@@ -1305,6 +1426,11 @@ def show_config_dialog(
             logger.info("show_window called! root.winfo_exists=%s", root.winfo_exists())
             if root.winfo_exists():
                 _force_restore_mouse()
+                try:
+                    fresh_cfg = LockerConfig.load()
+                    sync_ui_from_config(fresh_cfg)
+                except Exception as exc:
+                    logger.debug("Config reload in show_window: %s", exc)
                 root.config(cursor="arrow")
                 root.deiconify()
                 root.state("normal")
@@ -1351,6 +1477,7 @@ def show_config_dialog(
             return
         new_cfg = build_config(lock_on_launch=True)
         new_cfg.save()
+        _update_dialog_state(new_cfg)
         result["config"] = new_cfg
         result["launch"] = True
         if standalone:
@@ -1361,30 +1488,27 @@ def show_config_dialog(
                 on_lock(new_cfg)
 
     def run_in_background():
-        if not validate():
-            return
-        new_cfg = build_config(lock_on_launch=False)
-        new_cfg.save()
-        result["config"] = new_cfg
-        result["launch"] = True
-        if standalone:
-            root.destroy()
-        else:
-            hide_window()
-            if on_save:
-                on_save(new_cfg)
-            if on_hide:
-                on_hide()
+        save_settings(stay_open=False)
 
     def cancel():
         if standalone:
             try:
-                current_cfg = build_config(lock_on_launch=cfg.lock_on_launch)
-                current_cfg.save()
+                if _has_unsaved_changes() and validate():
+                    current_cfg = build_config(lock_on_launch=cfg.lock_on_launch)
+                    current_cfg.save()
             except Exception:
                 pass
             root.destroy()
         else:
+            try:
+                if _has_unsaved_changes() and validate():
+                    current_cfg = build_config(lock_on_launch=cfg.lock_on_launch)
+                    current_cfg.save()
+                    _update_dialog_state(current_cfg)
+                    if on_save:
+                        on_save(current_cfg)
+            except Exception as exc:
+                logger.debug("Auto-save on cancel: %s", exc)
             hide_window()
             if on_hide:
                 on_hide()

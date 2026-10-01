@@ -440,6 +440,10 @@ class Win32Overlay:
             return bool(_user32.SetLayeredWindowAttributes(self._hwnd, 0, self.alpha, LWA_ALPHA))
         return False
 
+    def set_wallpaper(self, wallpaper_path: str) -> None:
+        """Stub for dynamic wallpaper setting in lightweight Win32 backend."""
+        self.wallpaper_path = wallpaper_path
+
     @property
     def hwnd(self) -> Optional[int]:
         """Returns the HWND of the overlay window."""

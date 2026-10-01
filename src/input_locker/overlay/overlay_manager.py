@@ -79,6 +79,12 @@ class OverlayManager:
         if hasattr(self.overlay, "set_unlock_hotkey"):
             self.overlay.set_unlock_hotkey(hotkey)
 
+    def set_wallpaper(self, wallpaper: str) -> None:
+        """Dynamically update wallpaper image across active overlay windows."""
+        self.wallpaper = wallpaper
+        if hasattr(self.overlay, "set_wallpaper"):
+            self.overlay.set_wallpaper(wallpaper)
+
     def prewarm(self) -> None:
         """Pre-creates the overlay window(s) in hidden state to eliminate show latency."""
         with self._lock:

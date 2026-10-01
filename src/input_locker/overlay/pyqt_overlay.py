@@ -173,6 +173,23 @@ class _ScreenOverlayWidget(QWidget):
         if hasattr(self, "_hotkey_label"):
             self._hotkey_label.setText(f"Press {self.unlock_hotkey} to Unlock")
 
+    def set_wallpaper(self, wallpaper_path: str) -> None:
+        """Dynamically update or clear wallpaper and trigger screen repaint."""
+        self._wallpaper_pixmap = None
+        if wallpaper_path:
+            from pathlib import Path as _Path
+            if _Path(wallpaper_path).is_file():
+                from PyQt6.QtGui import QPixmap
+                px = QPixmap(wallpaper_path)
+                self._wallpaper_pixmap = px if not px.isNull() else None
+
+        if self._wallpaper_pixmap is not None:
+            self.setStyleSheet("background-color: transparent;")
+        else:
+            self.setStyleSheet("background-color: rgba(10, 15, 26, 175);")
+
+        self.update()
+
 
 _user32 = ctypes.windll.user32
 _user32.SetWindowPos.restype = wintypes.BOOL
@@ -197,6 +214,7 @@ class _OverlayBridge(QObject):
     sig_show = pyqtSignal()
     sig_hide = pyqtSignal()
     sig_close = pyqtSignal()
+    sig_set_wallpaper = pyqtSignal(str)
 
     def __init__(self, widgets: List[_ScreenOverlayWidget]) -> None:
         super().__init__()
@@ -205,6 +223,12 @@ class _OverlayBridge(QObject):
         self.sig_show.connect(self._handle_show)
         self.sig_hide.connect(self._handle_hide)
         self.sig_close.connect(self._handle_close)
+        self.sig_set_wallpaper.connect(self._handle_set_wallpaper)
+
+    @pyqtSlot(str)
+    def _handle_set_wallpaper(self, wallpaper_path: str) -> None:
+        for w in self.widgets:
+            w.set_wallpaper(wallpaper_path)
 
     @pyqtSlot()
     def _handle_show(self) -> None:
@@ -283,6 +307,15 @@ class PyQtOverlay:
         self.unlock_hotkey = hotkey
         for w in self._widgets:
             w.set_unlock_hotkey(hotkey)
+
+    def set_wallpaper(self, wallpaper_path: str) -> None:
+        """Dynamically update wallpaper across all overlay widgets."""
+        self.wallpaper_path = wallpaper_path
+        if self._bridge is not None:
+            self._bridge.sig_set_wallpaper.emit(wallpaper_path)
+        else:
+            for w in self._widgets:
+                w.set_wallpaper(wallpaper_path)
 
     def _worker_thread(self) -> None:
         """Background thread hosting QApplication and overlay widgets."""

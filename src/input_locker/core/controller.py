@@ -230,7 +230,7 @@ class LockerController:
             self._lock_hotkey = getattr(cfg, "lock_hotkey", "F11")
             self._unlock_hotkey = getattr(cfg, "unlock_hotkey", "Ctrl+Alt+Shift+U")
             wp = getattr(cfg, "wallpaper", "")
-            if wp and hasattr(self.overlay_manager, "set_wallpaper"):
+            if hasattr(self.overlay_manager, "set_wallpaper"):
                 self.overlay_manager.set_wallpaper(wp)
             elif hasattr(self.overlay_manager, "wallpaper"):
                 self.overlay_manager.wallpaper = wp

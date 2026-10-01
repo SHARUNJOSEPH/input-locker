@@ -6,13 +6,13 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="JOSEPHSHARUN.InputLocker"
+    Name="JOSEPHSHARUN.InputLockerApp"
     Publisher="CN=551A075B-7286-4B87-A119-02586E46BABD"
-    Version="0.2.5.0"
+    Version="0.2.6.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>Input Locker</DisplayName>
+    <DisplayName>Input Locker App</DisplayName>
     <PublisherDisplayName>JOSEPH SHARUN</PublisherDisplayName>
     <Logo>assets\store\StoreLogo.png</Logo>
     <Description>High-performance zero-latency Windows AV staging lock and global input interception utility for live production and events.</Description>
@@ -37,7 +37,7 @@
       Executable="InputLocker.exe"
       EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="Input Locker"
+        DisplayName="Input Locker App"
         Description="AV Staging Lock &amp; Global Input Interception"
         BackgroundColor="#0B0F19"
         Square150x150Logo="assets\store\Square150x150Logo.png"
