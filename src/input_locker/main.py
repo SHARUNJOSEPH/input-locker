@@ -165,6 +165,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     locker_cfg = LockerConfig.load()
     set_locale(getattr(locker_cfg, "language", "auto"))
 
+    # ── Anonymous Usage Telemetry ──────────────────────────────────────────
+    try:
+        from input_locker.telemetry import record_startup_telemetry
+        record_startup_telemetry(locker_cfg)
+    except Exception as exc:
+        logger.debug("Failed to record startup telemetry: %s", exc)
+
     # ── Initial Configuration Values ───────────────────────────────────────
     effective_password  = args.password or locker_cfg.password
     effective_hash      = locker_cfg.password_hash

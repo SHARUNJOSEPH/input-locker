@@ -78,6 +78,8 @@ class LockerConfig:
     lock_hotkey: str = "F11"
     unlock_hotkey: str = "Ctrl+Alt+Shift+U"
     language: str = "auto"
+    telemetry_enabled: bool = True
+    install_recorded: bool = False
 
     @property
     def has_password(self) -> bool:
@@ -130,6 +132,8 @@ class LockerConfig:
                     lock_hotkey=data.get("lock_hotkey", "F11"),
                     unlock_hotkey=data.get("unlock_hotkey", "Ctrl+Alt+Shift+U"),
                     language=data.get("language", "auto"),
+                    telemetry_enabled=data.get("telemetry_enabled", True),
+                    install_recorded=data.get("install_recorded", False),
                 )
                 # If the legacy config contained a plaintext password, immediately resave with hash-only
                 if pw:
