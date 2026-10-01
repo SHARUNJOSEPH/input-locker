@@ -62,7 +62,8 @@ A high-performance, zero-latency background utility engineered for Windows live 
 
 | Package | Format | Architecture | Download Link |
 | :--- | :---: | :---: | :--- |
-| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download ``**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.6/InputLocker-Setup-v0.2.6.exe) |
+| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.6.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.6/InputLocker-Setup-v0.2.6.exe) |
+| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.6-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.6/InputLocker-v0.2.6-Windows-x64.zip) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 
 ### ⚡ Command-Line Install (`winget`)
