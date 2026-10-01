@@ -43,16 +43,27 @@ A high-performance, zero-latency background utility engineered for Windows live 
 
 ---
 
-## 📥 Installation & Download Packages
+## 📥 Installation & Download
 
-Choose your preferred download package. **No Python or external runtimes are required!**
+### ✅ Recommended — Microsoft Store (Free, Auto-Updates)
 
-## 📥 Direct Downloads
+<p align="center">
+  <a href="https://apps.microsoft.com/detail/9N1FH6TPBSNP">
+    <img src="https://img.shields.io/badge/Download%20on-Microsoft%20Store-0078D4?style=for-the-badge&logo=microsoft&logoColor=white" alt="Download on Microsoft Store" />
+  </a>
+</p>
+
+> Installs automatically, updates silently, no setup required.  
+> 👉 **[https://apps.microsoft.com/detail/9N1FH6TPBSNP](https://apps.microsoft.com/detail/9N1FH6TPBSNP)**
+
+---
+
+### 📦 Manual / Sideload Downloads (GitHub Releases)
 
 | Package | Format | Architecture | Download Link |
 | :--- | :---: | :---: | :--- |
-| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.6.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-Setup-v0.2.6.exe) |
 | **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.6-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-v0.2.6-Windows-x64.zip) |
+| **Input Locker MSIX Package** | `.msix` | Windows 10 / 11 (64-bit) | [📥 **Download `InputLocker-v0.2.6.msix`**](https://github.com/SHARUNJOSEPH/input-locker/releases/latest/download/InputLocker-v0.2.6.msix) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 
 ### ⚡ Command-Line Install (`winget`)
@@ -61,9 +72,6 @@ Choose your preferred download package. **No Python or external runtimes are req
 winget install SharunJoseph.InputLocker
 ```
 *(Official package manifests in [`packaging/winget`](packaging/winget/) — see [Winget Submission Guide](docs/WINGET_SUBMISSION.md))*
-
-> [!TIP]
-> **Zero Installation Setup**: Simply download **`InputLocker.exe`**, place it on your Desktop or in your staging folder, and double-click to launch!
 
 ---
 
