@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.7] - 2026-10-01
+
+### Added
+- **Anonymous Install & Open Analytics**: Integrated privacy-first Aptabase telemetry to distinguish Microsoft Store vs GitHub installations with zero PII.
+- **Store Packaging Update**: Bumped MSIX package identity to 0.2.7.0 for Microsoft Store certification.
+
+### Fixed
+- **Settings & Dynamic Wallpaper Persistence**: Resolved settings persistence bug and added explicit "Save Changes" button.
+
+---
+
 ## [0.2.6] - 2026-10-01
 
 ### Added

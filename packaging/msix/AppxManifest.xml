@@ -8,7 +8,7 @@
   <Identity
     Name="JOSEPHSHARUN.InputLockerApp"
     Publisher="CN=551A075B-7286-4B87-A119-02586E46BABD"
-    Version="0.2.6.1"
+    Version="0.2.7.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
