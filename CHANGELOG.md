@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.8] - 2026-10-07
+
+### Added
+- **Precision Touchpad & Multi-Finger Gesture Suppression**: Intercepts and swallows 3-finger and 4-finger touchpad gestures (Win+Tab, Alt+Tab, Ctrl+Win+Arrows, Win+D, Win+A, Win+S, Win+Arrows) during lock state and password entry mode.
+- **Physical Touchscreen Tap & Drag Absorption**: Registers overlay window with Windows touch architecture (`RegisterTouchWindow`), captures pointer and touch events, and eliminates event pass-through to underlying background windows.
+- **Resilient In-App Updater**: Added smooth 302 HTTP redirect resolution for direct GitHub release asset downloads, robust 10.0s network timeout, and clear user-facing error reporting with fallback to browser releases page.
+
+### Fixed
+- **Overlay Hit Testing & Zero Focus Disruption**: Removed `WS_EX_TRANSPARENT` style while retaining `WS_EX_NOACTIVATE`, returning `HTCLIENT` and `MA_NOACTIVATEANDEAT` to consume clicks and taps without stealing focus from active AV staging engines.
+
+---
+
 ## [0.2.7] - 2026-10-01
 
 ### Added

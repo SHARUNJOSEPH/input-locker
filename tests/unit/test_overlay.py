@@ -16,6 +16,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import time
+from unittest.mock import MagicMock, patch
 import pytest
 
 from input_locker.overlay.cursor_guard import CursorGuard
@@ -140,13 +141,50 @@ class TestWin32Overlay:
 
             ex_style = overlay.get_ex_style()
 
-            # Verify each required extended style bit is present
+            # Verify non-activating, layered, toolwindow, and topmost styles are present
             assert (ex_style & WS_EX_NOACTIVATE) == WS_EX_NOACTIVATE, "WS_EX_NOACTIVATE missing"
-            assert (ex_style & WS_EX_TRANSPARENT) == WS_EX_TRANSPARENT, "WS_EX_TRANSPARENT missing"
             assert (ex_style & WS_EX_LAYERED) == WS_EX_LAYERED, "WS_EX_LAYERED missing"
             assert (ex_style & WS_EX_TOOLWINDOW) == WS_EX_TOOLWINDOW, "WS_EX_TOOLWINDOW missing"
             assert (ex_style & WS_EX_TOPMOST) == WS_EX_TOPMOST, "WS_EX_TOPMOST missing"
+            # WS_EX_TRANSPARENT must NOT be set, to ensure touchscreen taps & multi-touch gestures do not pass through
+            assert (ex_style & WS_EX_TRANSPARENT) == 0, "WS_EX_TRANSPARENT must not be set on locked overlay"
             assert (ex_style & OVERLAY_EX_STYLE) == OVERLAY_EX_STYLE
+
+    def test_win32_overlay_wndproc_absorbs_pointer_and_touch(self):
+        """Verifies wndproc returns HTCLIENT, MA_NOACTIVATEANDEAT, and absorbs touch/pointer events."""
+        from input_locker.overlay.win32_overlay import _global_overlay_wndproc, WM_NCHITTEST
+
+        # 1. Hit testing must return HTCLIENT (1) so pointer events hit the overlay and do not fall through
+        res = _global_overlay_wndproc(0, WM_NCHITTEST, 0, 0)
+        assert res == 1
+
+        # 2. Mouse activation must return MA_NOACTIVATEANDEAT (3) to prevent focus theft and swallow clicks
+        res = _global_overlay_wndproc(0, 0x0021, 0, 0)
+        assert res == 3
+
+        # 3. Touch, pointer, drag, and mouse click messages must return 0 (consumed)
+        absorbed_msgs = (
+            0x0119,  # WM_GESTURE
+            0x0240,  # WM_TOUCH
+            0x0245, 0x0246, 0x0247, 0x024D,  # WM_POINTER*
+            0x0200, 0x0201, 0x0202,  # WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP
+            0x0204, 0x0205, 0x020A, 0x007B,  # WM_RBUTTON*, WM_MOUSEWHEEL, WM_CONTEXTMENU
+        )
+        for msg_id in absorbed_msgs:
+            res = _global_overlay_wndproc(0, msg_id, 0, 0)
+            assert res == 0
+
+        # 4. WM_TOUCH and WM_GESTURE must close unmanaged handles when lparam is passed
+        from unittest.mock import patch
+        with patch("input_locker.overlay.win32_overlay._user32.CloseTouchInputHandle") as mock_close_touch:
+            res = _global_overlay_wndproc(0, 0x0240, 0, 9999)
+            assert res == 0
+            mock_close_touch.assert_called_once_with(9999)
+
+        with patch("input_locker.overlay.win32_overlay._user32.CloseGestureInfoHandle") as mock_close_gesture:
+            res = _global_overlay_wndproc(0, 0x0119, 0, 8888)
+            assert res == 0
+            mock_close_gesture.assert_called_once_with(8888)
 
     def test_win32_overlay_show_hide_lifecycle(self):
         """Verifies overlay transitions between hidden and visible states."""
@@ -250,6 +288,23 @@ class TestPyQtOverlay:
             hide_ok = overlay.hide()
             assert hide_ok is True
             assert overlay.is_visible() is False
+
+    def test_pyqt_overlay_absorbs_touch_and_mouse(self):
+        """Verifies PyQt overlay accepts touch events and rejects mouse event pass-through."""
+        from PyQt6.QtCore import Qt
+        with PyQtOverlay() as overlay:
+            overlay.prewarm()
+            time.sleep(0.05)
+            for w in overlay._widgets:
+                # Must accept touch events
+                assert w.testAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents) is True
+                # Must NOT be transparent to mouse/touch events
+                assert w.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents) is False
+
+                # Verify tabletEvent accepts stylus events
+                mock_tablet_ev = MagicMock()
+                w.tabletEvent(mock_tablet_ev)
+                mock_tablet_ev.accept.assert_called_once()
 
     def test_pyqt_overlay_with_wallpaper_renders_lock_badge(self, tmp_path):
         """Verifies lock symbol badge is rendered on top even when a wallpaper is configured."""
@@ -424,3 +479,71 @@ class TestOverlayManager:
             # Final state verification
             assert mgr.is_cursor_confined() is False
             assert mgr.is_overlay_visible() is False
+
+
+# ===========================================================================
+# 6. Raw Input Device Registration — PTP Gesture Suppression Tests
+# ===========================================================================
+
+class TestRawTouchRegistration:
+    """Tests for RegisterRawInputDevices-based PTP gesture suppression."""
+
+    def test_register_and_unregister_raw_touch_return_bool(self):
+        """register_raw_touch and unregister_raw_touch must return a bool result."""
+        from input_locker.overlay.win32_overlay import register_raw_touch, unregister_raw_touch
+        # Attempt registration with a dummy HWND=0 (may fail gracefully, must not raise)
+        result = register_raw_touch(0)
+        assert isinstance(result, bool)
+        result2 = unregister_raw_touch()
+        assert isinstance(result2, bool)
+
+    def test_rawinputdevice_struct_size_matches_windows_api(self):
+        """RAWINPUTDEVICE struct matches 64-bit (16 bytes) or 32-bit (12 bytes) Windows ABI."""
+        import ctypes
+        from input_locker.overlay.win32_overlay import RAWINPUTDEVICE
+        expected_size = 16 if ctypes.sizeof(ctypes.c_void_p) == 8 else 12
+        assert ctypes.sizeof(RAWINPUTDEVICE) == expected_size, (
+            f"RAWINPUTDEVICE should be {expected_size} bytes, got {ctypes.sizeof(RAWINPUTDEVICE)}"
+        )
+
+    def test_rawinputdevice_fields(self):
+        """RAWINPUTDEVICE must expose the four required Win32 fields."""
+        from input_locker.overlay.win32_overlay import RAWINPUTDEVICE, HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD
+        dev = RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD, 0, 0)
+        assert dev.usUsagePage == HID_USAGE_PAGE_DIGITIZER
+        assert dev.usUsage == HID_USAGE_TOUCHPAD
+        assert dev.dwFlags == 0
+        assert dev.hwndTarget in (0, None)
+
+    def test_ridev_flags_combined_correctly(self):
+        """RIDEV_NOLEGACY | RIDEV_INPUTSINK must equal 0x130 (documented values)."""
+        from input_locker.overlay.win32_overlay import RIDEV_NOLEGACY, RIDEV_INPUTSINK
+        assert RIDEV_NOLEGACY == 0x00000030
+        assert RIDEV_INPUTSINK == 0x00000100
+        combined = RIDEV_NOLEGACY | RIDEV_INPUTSINK
+        assert combined == 0x00000130
+
+    def test_wndproc_handles_wm_input(self):
+        """WM_INPUT (0x00FF) must be handled by wndproc (returns 0) without raising."""
+        from input_locker.overlay.win32_overlay import _global_overlay_wndproc
+        # WM_INPUT with hwnd=0: DefWindowProcW call is expected; must return 0 without raising
+        try:
+            result = _global_overlay_wndproc(0, 0x00FF, 0, 0)
+            assert result == 0
+        except Exception as exc:
+            pytest.fail(f"WM_INPUT handler raised unexpectedly: {exc}")
+
+    def test_register_raw_touch_with_real_hwnd(self):
+        """register_raw_touch succeeds when called with a real overlay HWND."""
+        from input_locker.overlay.win32_overlay import (
+            Win32Overlay, register_raw_touch, unregister_raw_touch
+        )
+        with Win32Overlay(alpha=120) as overlay:
+            hwnd = overlay.hwnd
+            assert hwnd is not None and hwnd != 0
+            # Should succeed: real HWND + real message loop
+            result = register_raw_touch(hwnd)
+            assert result is True, "register_raw_touch should succeed with a valid HWND"
+            # Clean up
+            unregister_raw_touch()
+

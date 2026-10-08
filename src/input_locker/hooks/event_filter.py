@@ -274,6 +274,7 @@ class EventFilter:
                     or vk in SHIFT_KEYS
                     or vk in WIN_KEYS
                     or vk == self._lock_binding.vk
+                    or (self._password_mode and vk == 0x4C)
                 ):
                     self._active_keys.add(vk)
                 # Clear any expired pending keyups when user types normal keys
@@ -368,6 +369,34 @@ class EventFilter:
                     except Exception as exc:
                         logger.error("Error executing emergency unlock: %s", exc, exc_info=True)
 
+        # Precision Touchpad (PTP) & Shell Gesture shortcut detection:
+        # 3-finger / 4-finger gestures synthesize shortcut combinations:
+        # - Win + Tab (0x09 + Win): Task View
+        # - Alt + Tab (0x09 + Alt): Task Switcher
+        # - Ctrl + Win + Left/Right (0x25, 0x27 + Ctrl + Win): Switch Virtual Desktops
+        # - Win + D (0x44 + Win): Show Desktop
+        # - Win + A (0x41 + Win): Action Center
+        # - Win + S (0x53 + Win): Search
+        # - Win + Up/Down/Left/Right (0x26, 0x28, 0x25, 0x27 + Win): Snap Assist
+        is_gesture_combo = (
+            # Win + Tab
+            (vk == 0x09 and bool(self._active_keys & WIN_KEYS))
+            # Alt + Tab
+            or (vk == 0x09 and bool(self._active_keys & ALT_KEYS))
+            # Ctrl + Win + Left/Right
+            or (vk in (0x25, 0x26, 0x27, 0x28) and bool(self._active_keys & CTRL_KEYS) and bool(self._active_keys & WIN_KEYS))
+            # Win + D
+            or (vk == 0x44 and bool(self._active_keys & WIN_KEYS))
+            # Win + A
+            or (vk == 0x41 and bool(self._active_keys & WIN_KEYS))
+            # Win + S
+            or (vk == 0x53 and bool(self._active_keys & WIN_KEYS))
+            # Win + Arrow keys (Snap)
+            or (vk in (0x25, 0x26, 0x27, 0x28) and bool(self._active_keys & WIN_KEYS))
+            # Any non-Win key pressed while Win is held (covers all other shell shortcuts: Win+E, Win+R, Win+1..9, etc.)
+            or (vk not in WIN_KEYS and bool(self._active_keys & WIN_KEYS))
+        )
+
         # In password entry mode, suppress system task-switching shortcuts so background apps cannot be accessed
         is_task_switch = False
         if self._password_mode:
@@ -382,18 +411,21 @@ class EventFilter:
                 or (vk == 0x1B and bool(self._active_keys & ALT_KEYS))
                 # Alt + Space (Window system menu)
                 or (vk == 0x20 and bool(self._active_keys & ALT_KEYS))
+                # Alt + F4 (Close active window)
+                or (vk == 0x73 and bool(self._active_keys & ALT_KEYS))
+                # Gesture combos & shell combinations
+                or is_gesture_combo
             )
 
         # 3. Swallowing Determination & Win+L Neutralization:
-        # - While locked, if Windows key (0x5B, 0x5C) is pressed, immediately synthesize keyup
-        #   so Windows kernel does not register a held Win key or trigger Win+L workstation lock.
-        if self._swallow_active and HAS_USER32 and user32 is not None:
-            if vk in (0x5B, 0x5C) and is_down:
-                try:
-                    user32.keybd_event(vk, 0, 0x0002, 0)
-                except Exception:
-                    pass
-            elif vk == 0x4C and bool(self._active_keys & {0x5B, 0x5C}):
+        # Note: Do NOT synthesize keyup for Win keys on every keydown while locked,
+        # because synthesizing an injected keyup can trigger shell hotkey completion (like Win release).
+        # We only neutralize Win+L lock attempts when L and Win are both pressed (regardless of order).
+        if (self._swallow_active or self._password_mode) and HAS_USER32 and user32 is not None:
+            is_l_combo = (vk == 0x4C and bool(self._active_keys & WIN_KEYS)) or (
+                vk in WIN_KEYS and (0x4C in self._active_keys or self._query_async_keystate([0x4C]))
+            )
+            if is_l_combo:
                 try:
                     user32.keybd_event(0x5B, 0, 0x0002, 0)
                     user32.keybd_event(0x5C, 0, 0x0002, 0)

@@ -23,10 +23,11 @@ WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_LAYERED = 0x00080000
 WS_EX_NOACTIVATE = 0x08000000
 
-# Combined non-activating overlay extended style mask (0x080800A8)
+# Combined non-activating overlay extended style mask (0x08080088)
+# NOTE: WS_EX_TRANSPARENT (0x20) is intentionally omitted when locked so that touch and pointer
+# events hit the overlay and are swallowed, preventing bypass to background windows.
 OVERLAY_EX_STYLE = (
     WS_EX_NOACTIVATE
-    | WS_EX_TRANSPARENT
     | WS_EX_LAYERED
     | WS_EX_TOOLWINDOW
     | WS_EX_TOPMOST
@@ -77,6 +78,94 @@ WNDPROC = ctypes.WINFUNCTYPE(LRESULT, HWND, UINT, WPARAM, LPARAM)
 _user32 = ctypes.windll.user32
 _kernel32 = ctypes.windll.kernel32
 _gdi32 = ctypes.windll.gdi32
+
+# ---------------------------------------------------------------------------
+# Raw Input Device registration — gesture bypass suppression
+#
+# RegisterRawInputDevices with RIDEV_NOLEGACY on HID touchscreen & touchpad
+# usage pages prevents DirectManipulation (inside explorer.exe) from receiving
+# finger data, which stops 3-finger / 4-finger Shell gestures at the source
+# rather than attempting to catch their synthesised keystrokes too late.
+# ---------------------------------------------------------------------------
+
+RIDEV_REMOVE        = 0x00000001   # unregister a previously registered device
+RIDEV_NOLEGACY      = 0x00000030   # suppress legacy WM_TOUCH / gesture pipeline
+RIDEV_INPUTSINK     = 0x00000100   # receive input even when not foreground
+RIDEV_EXINPUTSINK   = 0x00001000   # receive input from other processes even when not focused
+
+HID_USAGE_PAGE_DIGITIZER  = 0x0D
+HID_USAGE_TOUCHSCREEN     = 0x04
+HID_USAGE_TOUCHPAD        = 0x05
+
+
+class RAWINPUTDEVICE(ctypes.Structure):
+    """Win32 RAWINPUTDEVICE structure for RegisterRawInputDevices."""
+    _fields_ = [
+        ("usUsagePage", ctypes.c_ushort),
+        ("usUsage",     ctypes.c_ushort),
+        ("dwFlags",     wintypes.DWORD),
+        ("hwndTarget",  wintypes.HWND),
+    ]
+
+
+def register_raw_touch(hwnd: int) -> bool:
+    """Claim raw HID touch/touchpad reports to suppress the Shell gesture pipeline.
+
+    Registers the HID digitizer touchscreen (0x04) and touchpad (0x05) usages
+    with RIDEV_INPUTSINK. This redirects raw multi-touch and precision touchpad
+    reports directly to the overlay's input sink, bypassing DirectManipulation
+    and preventing shell multi-finger gestures while locked.
+
+    Args:
+        hwnd: Target HWND that will receive WM_INPUT messages. The window
+              does not need to be visible or foreground (RIDEV_INPUTSINK).
+
+    Returns:
+        True on success, False if the registration fails.
+    """
+    if not hwnd:
+        return False
+
+    try:
+        flags = RIDEV_INPUTSINK
+        devices = (RAWINPUTDEVICE * 2)(
+            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHSCREEN, flags, hwnd),
+            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD,    flags, hwnd),
+        )
+        ok = bool(_user32.RegisterRawInputDevices(
+            devices, 2, ctypes.sizeof(RAWINPUTDEVICE)
+        ))
+        if not ok:
+            logger.debug("RegisterRawInputDevices failed: error %s", _kernel32.GetLastError())
+        return ok
+    except Exception as exc:
+        logger.debug("register_raw_touch error: %s", exc)
+        return False
+
+
+def unregister_raw_touch() -> bool:
+    """Release the raw HID touch/touchpad claim, restoring Shell gesture pipeline.
+
+    Must be called when unlocking so normal touchpad gestures are restored for
+    the user's regular Windows session.
+
+    Returns:
+        True on success.
+    """
+    try:
+        devices = (RAWINPUTDEVICE * 2)(
+            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHSCREEN, RIDEV_REMOVE, 0),
+            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD,    RIDEV_REMOVE, 0),
+        )
+        ok = bool(_user32.RegisterRawInputDevices(
+            devices, 2, ctypes.sizeof(RAWINPUTDEVICE)
+        ))
+        if not ok:
+            logger.debug("unregister_raw_touch failed: error %s", _kernel32.GetLastError())
+        return ok
+    except Exception as exc:
+        logger.debug("unregister_raw_touch error: %s", exc)
+        return False
 
 # Configure ctypes prototypes with 64-bit safety
 _kernel32.GetModuleHandleW.restype = wintypes.HINSTANCE
@@ -166,12 +255,81 @@ _user32.PostMessageW.argtypes = [HWND, UINT, WPARAM, LPARAM]
 _user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
 _user32.GetWindowLongPtrW.argtypes = [HWND, ctypes.c_int]
 
+if hasattr(_user32, "CloseTouchInputHandle"):
+    _user32.CloseTouchInputHandle.restype = wintypes.BOOL
+    _user32.CloseTouchInputHandle.argtypes = [ctypes.c_void_p]
+
+if hasattr(_user32, "CloseGestureInfoHandle"):
+    _user32.CloseGestureInfoHandle.restype = wintypes.BOOL
+    _user32.CloseGestureInfoHandle.argtypes = [ctypes.c_void_p]
+
 
 def _global_overlay_wndproc(hwnd: int, msg: int, wparam: int, lparam: int) -> int:
     """Persistent module-level window procedure that is never garbage-collected."""
     if msg == WM_NCHITTEST:
-        # Hit-test transparency: pass all mouse clicks to underlying windows
-        return HTTRANSPARENT
+        # Absorb hit-testing on the overlay (HTCLIENT = 1) so clicks and taps do NOT pass through
+        # to background windows/media engines while locked.
+        return 1  # HTCLIENT
+    elif msg == 0x0021:  # WM_MOUSEACTIVATE
+        # Do not activate this window and discard the mouse click / tap (MA_NOACTIVATEANDEAT = 3)
+        return 3
+    elif msg == 0x00FF:  # WM_INPUT
+        # Raw input is claimed by RIDEV_NOLEGACY registration to suppress the Shell gesture
+        # pipeline (DirectManipulation in explorer.exe never sees finger data).
+        # We must call DefWindowProcW to free the raw input buffer — we do NOT parse it.
+        _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+        return 0
+    elif msg == 0x0240:  # WM_TOUCH
+        # Consume touch events and close the unmanaged touch input handle to prevent OS kernel leaks
+        try:
+            if hasattr(_user32, "CloseTouchInputHandle") and lparam:
+                _user32.CloseTouchInputHandle(lparam)
+        except Exception:
+            pass
+        return 0
+    elif msg == 0x0119:  # WM_GESTURE
+        # Consume gesture events and close the gesture info handle to prevent OS kernel leaks
+        try:
+            if hasattr(_user32, "CloseGestureInfoHandle") and lparam:
+                _user32.CloseGestureInfoHandle(lparam)
+        except Exception:
+            pass
+        return 0
+    elif msg in (
+        # Pointer Architecture (Windows 8+)
+        0x0241,  # WM_NCPOINTERUPDATE
+        0x0242,  # WM_NCPOINTERDOWN
+        0x0243,  # WM_NCPOINTERUP
+        0x0245,  # WM_POINTERUPDATE
+        0x0246,  # WM_POINTERDOWN
+        0x0247,  # WM_POINTERUP
+        0x0249,  # WM_POINTERENTER
+        0x024A,  # WM_POINTERLEAVE
+        0x024B,  # WM_POINTERACTIVATE
+        0x024C,  # WM_POINTERCAPTURECHANGED
+        0x024D,  # WM_TOUCHHITTESTING
+        0x0252,  # WM_POINTERWHEEL
+        0x0253,  # WM_POINTERHWHEEL
+        # Mouse Messages & Emulated Touch Clicks/Drags
+        0x007B,  # WM_CONTEXTMENU
+        0x0200,  # WM_MOUSEMOVE
+        0x0201,  # WM_LBUTTONDOWN
+        0x0202,  # WM_LBUTTONUP
+        0x0203,  # WM_LBUTTONDBLCLK
+        0x0204,  # WM_RBUTTONDOWN
+        0x0205,  # WM_RBUTTONUP
+        0x0206,  # WM_RBUTTONDBLCLK
+        0x0207,  # WM_MBUTTONDOWN
+        0x0208,  # WM_MBUTTONUP
+        0x0209,  # WM_MBUTTONDBLCLK
+        0x020A,  # WM_MOUSEWHEEL
+        0x020B,  # WM_XBUTTONDOWN
+        0x020C,  # WM_XBUTTONUP
+        0x020D,  # WM_XBUTTONDBLCLK
+        0x020E,  # WM_MOUSEHWHEEL
+    ):
+        # Absorb and consume all touch, pointer, drag, and mouse click messages
+        return 0
     elif msg == WM_PAINT:
         # BeginPaint/EndPaint required to clear the dirty region; fill with BLACK_BRUSH
         ps = PAINTSTRUCT()
@@ -317,6 +475,19 @@ class Win32Overlay:
 
         self._hwnd = hwnd
 
+        # Register window with Windows touch architecture to receive physical multi-touch & gestures directly
+        try:
+            if hasattr(_user32, "RegisterTouchWindow"):
+                _user32.RegisterTouchWindow(hwnd, 0)
+        except Exception as exc:
+            logger.debug("Win32 RegisterTouchWindow error: %s", exc)
+
+        # Claim raw HID touch/touchpad reports with RIDEV_NOLEGACY so DirectManipulation
+        # inside explorer.exe cannot process multi-finger PTP gestures while locked.
+        # unregister_raw_touch() is called in close() to restore normal gesture behaviour.
+        register_raw_touch(hwnd)
+        logger.debug("Win32Overlay: raw touch claim registered for hwnd=%s", hwnd)
+
         # Set transparency (alpha blending)
         _user32.SetLayeredWindowAttributes(hwnd, 0, self.alpha, LWA_ALPHA)
 
@@ -453,6 +624,8 @@ class Win32Overlay:
         """Closes and destroys the overlay window and terminates the worker thread."""
         with self._state_lock:
             self._stop_event.set()
+            # Release raw HID touch/touchpad claim so normal Shell gestures are restored
+            unregister_raw_touch()
             if self._hwnd:
                 _user32.PostMessageW(self._hwnd, WM_CLOSE, 0, 0)
             if self._thread and self._thread.is_alive():

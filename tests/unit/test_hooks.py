@@ -436,6 +436,170 @@ class TestEventFilterResilienceAndEdgeCases:
         # Budget is 1 ms; lock-free filter is typically under 0.01 ms
         assert avg_latency_ms < 0.1, f"Avg latency too high: {avg_latency_ms:.4f} ms"
 
+    def test_touchpad_gesture_shortcuts_swallowed_when_locked(self) -> None:
+        """Verify 3-finger / 4-finger gesture shortcuts (Win+Tab, Alt+Tab, Ctrl+Win+Arrows, Win+D) are swallowed."""
+        ef = EventFilter(swallow_active=True)
+        mock_kb = MagicMock()
+        ef.set_listeners(keyboard_listener=mock_kb)
+
+        # 1. Win + Tab (Task View gesture)
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # LWIN
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x09))  # Tab
+        mock_kb.suppress_event.assert_called_once()
+
+        # 2. Ctrl + Win + Right (Virtual desktop switch gesture)
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x11))  # Ctrl
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x27))  # Right arrow
+        mock_kb.suppress_event.assert_called_once()
+
+        # 3. Win + D (Show desktop gesture)
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x44))  # 'D'
+        mock_kb.suppress_event.assert_called_once()
+
+        # 4. Alt + Tab (Task switch gesture)
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x5B))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x11))
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x12))  # Alt
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x09))  # Tab
+        mock_kb.suppress_event.assert_called_once()
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x12))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x09))
+
+        # 5. Win + A (Action Center gesture)
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x41))  # 'A'
+        mock_kb.suppress_event.assert_called_once()
+
+        # 6. Win + S (Search gesture)
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x53))  # 'S'
+        mock_kb.suppress_event.assert_called_once()
+
+        # 7. Win + Arrow (Snap Assist)
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x26))  # Up Arrow
+        mock_kb.suppress_event.assert_called_once()
+
+    def test_touchpad_gesture_shortcuts_swallowed_in_password_mode(self) -> None:
+        """Verify gesture and task-switching shortcuts are suppressed during password entry mode."""
+        ef = EventFilter(swallow_active=False)
+        ef.set_password_mode(True)
+        mock_kb = MagicMock()
+        ef.set_listeners(keyboard_listener=mock_kb)
+
+        # Win + Tab in password mode must be swallowed
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x09))  # Tab
+        mock_kb.suppress_event.assert_called_once()
+
+        # Win + D in password mode must be swallowed
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x44))  # 'D'
+        mock_kb.suppress_event.assert_called_once()
+
+        # Win + A / Win + S in password mode must be swallowed
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x41))  # 'A'
+        mock_kb.suppress_event.assert_called()
+
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x53))  # 'S'
+        mock_kb.suppress_event.assert_called()
+
+        # Alt + Tab in password mode must be swallowed
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x5B))
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x12))  # Alt
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x09))  # Tab
+        mock_kb.suppress_event.assert_called_once()
+
+        # Alt + F4 in password mode must be swallowed (prevent window closure)
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x73))  # F4
+        mock_kb.suppress_event.assert_called_once()
+
+        # Ctrl + Win + Left/Right in password mode must be swallowed
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x12))
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x11))  # Ctrl
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x25))  # Left
+        mock_kb.suppress_event.assert_called_once()
+
+        # Win + E (Explorer) and general Win shortcuts in password mode must be swallowed
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x45))  # 'E'
+        mock_kb.suppress_event.assert_called_once()
+
+        # Release keys
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x45))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x25))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x11))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x5B))
+
+        # Normal typing (e.g. 'A', 'D', 'S', 'E') without Win/Alt modifiers must pass through in password mode
+        for char_vk in (0x41, 0x44, 0x53, 0x45):
+            mock_kb.reset_mock()
+            res = ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(char_vk))
+            assert res is True
+            mock_kb.suppress_event.assert_not_called()
+
+    def test_win_l_neutralization_order_independent(self) -> None:
+        """Verify Win+L workstation lock is neutralized regardless of whether Win or L is pressed first."""
+        from unittest.mock import patch
+        ef = EventFilter(swallow_active=True)
+        mock_kb = MagicMock()
+        ef.set_listeners(keyboard_listener=mock_kb)
+
+        with patch("input_locker.hooks.event_filter.user32") as mock_user32:
+            # Case 1: Win pressed first, then L
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win down
+            mock_user32.keybd_event.reset_mock()
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x4C))  # 'L' down
+            assert mock_user32.keybd_event.called
+
+            # Reset state
+            ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x4C))
+            ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x5B))
+
+            # Case 2: L pressed first, then Win
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x4C))  # 'L' down
+            mock_user32.keybd_event.reset_mock()
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win down
+            assert mock_user32.keybd_event.called
+
+    def test_win_l_neutralization_in_password_mode(self) -> None:
+        """Verify Win+L workstation lock is neutralized during password entry mode."""
+        from unittest.mock import patch
+        ef = EventFilter(swallow_active=False)
+        ef.set_password_mode(True)
+        mock_kb = MagicMock()
+        ef.set_listeners(keyboard_listener=mock_kb)
+
+        with patch("input_locker.hooks.event_filter.user32") as mock_user32:
+            # Case 1: Win down, then L down
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win down
+            mock_user32.keybd_event.reset_mock()
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x4C))  # 'L' down
+            assert mock_user32.keybd_event.called
+
+            # Reset state
+            ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x4C))
+            ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x5B))
+
+            # Case 2: L down, then Win down
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x4C))  # 'L' down
+            mock_user32.keybd_event.reset_mock()
+            ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win down
+            assert mock_user32.keybd_event.called
+
 
 # ============================================================================
 # HookManager Tests

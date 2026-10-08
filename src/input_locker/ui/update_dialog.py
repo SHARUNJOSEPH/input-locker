@@ -377,10 +377,15 @@ class SoftwareUpdateDialog:
         if self.is_downloading or not self.update_info:
             return
 
-        download_url = self.update_info.get("direct_download_url") or self.update_info.get("release_url")
+        download_url = self.update_info.get("direct_download_url")
         if not download_url:
-            # Fallback to browser if no direct download asset
-            webbrowser.open(self.update_info.get("html_url") or self.update_info.get("release_url"))
+            # Fallback cleanly to browser release page if no direct download asset is available
+            target_url = (
+                self.update_info.get("html_url")
+                or self.update_info.get("release_url")
+                or "https://github.com/SHARUNJOSEPH/input-locker/releases"
+            )
+            webbrowser.open(target_url)
             return
 
         self.is_downloading = True
@@ -422,21 +427,31 @@ class SoftwareUpdateDialog:
                 self.bar_canvas.coords(self.bar_fill, 0, 0, canvas_w, 8)
                 self.bar_canvas.itemconfig(self.bar_fill, fill=PROGRESS_DONE)
 
-                self.lbl_prog_status.config(text="✓ Update downloaded successfully!", fg=EMERALD_TEXT)
-                self.lbl_summary.config(text="✓ Update package ready to install! Click 'Install & Restart' to apply now.", fg=EMERALD_TEXT)
+                if file_path.lower().endswith(".zip"):
+                    self.lbl_prog_status.config(text="✓ Update downloaded successfully!", fg=EMERALD_TEXT)
+                    self.lbl_summary.config(text="✓ Portable ZIP update package downloaded. Click 'Open Folder' to extract and run.", fg=EMERALD_TEXT)
+                    self.btn_install.config(text="📁 Open Folder")
+                else:
+                    self.lbl_prog_status.config(text="✓ Update downloaded successfully!", fg=EMERALD_TEXT)
+                    self.lbl_summary.config(text="✓ Update package ready to install! Click 'Install & Restart' to apply now.", fg=EMERALD_TEXT)
+                    self.btn_install.config(text="⚡ Install & Restart")
 
                 self.btn_download.pack_forget()
                 self.btn_install.pack(side="right", padx=(8, 0))
-                self.btn_dismiss.config(text="Install Later", command=self._on_close)
+                self.btn_dismiss.config(text="Install Later" if not file_path.lower().endswith(".zip") else "Close", command=self._on_close)
 
             if self.top.winfo_exists():
                 self.top.after(0, _ui)
 
         def _on_error(err_msg: str) -> None:
             def _ui():
+                if (self._cancel_event and self._cancel_event.is_set()) or "cancelled" in err_msg.lower():
+                    return
                 self.is_downloading = False
                 self.lbl_prog_status.config(text=f"Download failed: {err_msg}", fg=DANGER_TEXT)
-                self.lbl_prog_bytes.config(text="Please check internet connection or download manually.")
+                self.lbl_prog_bytes.config(
+                    text="Network error encountered. Click 'Releases Page' below to download manually via browser."
+                )
                 self.btn_download.config(text="🔄 Retry Download", state="normal", command=self._on_download_click)
                 self.btn_dismiss.config(text="Close", command=self._on_close)
 
@@ -464,8 +479,11 @@ class SoftwareUpdateDialog:
     def _on_install_click(self) -> None:
         if not self.downloaded_path:
             return
-        self.btn_install.config(text="⚡ Launching Installer...", state="disabled")
-        self.lbl_prog_status.config(text="Launching installer... Input Locker will restart automatically.")
+        if self.downloaded_path.lower().endswith(".zip"):
+            self.lbl_prog_status.config(text="Opening folder in File Explorer...")
+        else:
+            self.btn_install.config(text="⚡ Launching Installer...", state="disabled")
+            self.lbl_prog_status.config(text="Launching installer... Input Locker will restart automatically.")
         install_update_and_restart(self.downloaded_path)
 
     def _on_open_browser(self) -> None:

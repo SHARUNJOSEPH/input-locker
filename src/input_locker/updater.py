@@ -29,7 +29,7 @@ from input_locker import __version__
 logger = logging.getLogger(__name__)
 
 DEFAULT_UPDATE_REPO = "SHARUNJOSEPH/input-locker"
-_DEFAULT_TIMEOUT_S = 4.0
+_DEFAULT_TIMEOUT_S = 10.0
 
 
 def is_windows_store() -> bool:
@@ -160,6 +160,8 @@ def check_for_updates(
             "highlights": ["Store updates are installed automatically in the background."]
         }
 
+    effective_timeout = max(10.0, float(timeout if timeout is not None else _DEFAULT_TIMEOUT_S))
+
     repo = repo_or_url.strip() or DEFAULT_UPDATE_REPO
     if repo.startswith("https://"):
         endpoint = repo
@@ -182,16 +184,22 @@ def check_for_updates(
                 "Accept": "application/vnd.github.v3+json",
             },
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
+        with urllib.request.urlopen(req, timeout=effective_timeout) as resp:  # nosec B310
             if resp.status != 200:
                 return None
             data = json.loads(resp.read().decode("utf-8"))
 
-        tag_name = data.get("tag_name", "") or data.get("version", "")
+        if isinstance(data, list) and data:
+            data = data[0]
+        if not isinstance(data, dict):
+            return None
+
+        tag_name = data.get("tag_name", "") or data.get("version", "") or data.get("name", "")
         if not tag_name:
             return None
 
-        latest_clean = tag_name.lstrip("v")
+        tag_match = re.search(r"\d+(\.\d+)+", tag_name)
+        latest_clean = tag_match.group(0) if tag_match else tag_name.lstrip("v")
         has_update = is_newer_version(latest_clean, cur_ver)
 
         # Extract direct Windows setup/installer asset ONLY if an update is available
@@ -209,6 +217,12 @@ def check_for_updates(
                 for a in assets:
                     name = (a.get("name") or "").lower()
                     if name.endswith(".exe"):
+                        setup_asset = a
+                        break
+            if not setup_asset:
+                for a in assets:
+                    name = (a.get("name") or "").lower()
+                    if name.endswith(".msi"):
                         setup_asset = a
                         break
             if not setup_asset:
@@ -234,7 +248,7 @@ def check_for_updates(
             "clean_version": latest_clean,
             "release_name": data.get("name", f"Input Locker {tag_name}"),
             "release_notes": raw_body,
-            "release_url": direct_download_url or release_url,
+            "release_url": release_url,
             "html_url": release_url,
             "direct_download_url": direct_download_url,
             "highlights": highlights,
@@ -274,6 +288,7 @@ def download_file_with_progress(
     on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
     cancel_event: Optional[threading.Event] = None,
     timeout: float = 60.0,
+    max_redirects: int = 5,
 ) -> str:
     """Download a file over HTTPS with automatic redirect resolution and real-time progress.
 
@@ -283,49 +298,97 @@ def download_file_with_progress(
         on_progress: Callback invoked with {"percent": int, "received_bytes": int, "total_bytes": int}.
         cancel_event: Threading event to signal cancellation.
         timeout: Socket read timeout.
+        max_redirects: Maximum number of HTTP 30x redirects to follow.
 
     Returns:
         The downloaded file path.
     """
-    if not target_url.startswith("https://"):
-        raise ValueError("Download URL must use HTTPS scheme")
+    dest_dir = os.path.dirname(os.path.abspath(dest_path))
+    if dest_dir:
+        os.makedirs(dest_dir, exist_ok=True)
 
-    req = urllib.request.Request(
-        target_url,
-        headers={"User-Agent": f"InputLocker/{get_effective_version()}"},
-    )
+    effective_timeout = max(10.0, float(timeout if timeout is not None else 60.0))
+    current_url = target_url
+    redirects_followed = 0
 
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
-        if resp.status != 200:
-            raise RuntimeError(f"Server returned HTTP {resp.status}")
+    while True:
+        if not current_url.startswith("https://"):
+            raise ValueError(f"Download URL must use HTTPS scheme: {current_url}")
 
-        total_bytes = int(resp.headers.get("Content-Length", 0))
-        received_bytes = 0
-        chunk_size = 65536  # 64 KB
+        req = urllib.request.Request(
+            current_url,
+            headers={"User-Agent": f"InputLocker/{get_effective_version()}"},
+        )
 
-        with open(dest_path, "wb") as f:
-            while True:
-                if cancel_event and cancel_event.is_set():
-                    f.close()
-                    try:
-                        os.remove(dest_path)
-                    except OSError:
-                        pass
-                    raise RuntimeError("Download cancelled by user")
+        resp = urllib.request.urlopen(req, timeout=effective_timeout)  # nosec B310
 
-                chunk = resp.read(chunk_size)
-                if not chunk:
-                    break
-                f.write(chunk)
-                received_bytes += len(chunk)
+        # Check for 301/302/303/307/308 redirects (supports both urllib automatic redirect and manual/mock responses)
+        status_code = getattr(resp, "status", getattr(resp, "code", 200))
+        if status_code in (301, 302, 303, 307, 308):
+            redirect_url = resp.headers.get("Location")
+            resp.close()
+            if not redirect_url:
+                raise RuntimeError(f"HTTP {status_code} redirect without Location header")
+            current_url = urllib.parse.urljoin(current_url, redirect_url)
+            redirects_followed += 1
+            if redirects_followed > max_redirects:
+                raise RuntimeError(f"Too many HTTP redirects (exceeded limit of {max_redirects})")
+            continue
 
-                if on_progress:
-                    pct = min(100, int((received_bytes / total_bytes) * 100)) if total_bytes > 0 else 0
-                    on_progress({
-                        "percent": pct,
-                        "received_bytes": received_bytes,
-                        "total_bytes": total_bytes,
-                    })
+        final_url = getattr(resp, "geturl", lambda: current_url)()
+        if not final_url.startswith("https://"):
+            resp.close()
+            raise ValueError(f"Insecure non-HTTPS scheme detected in redirect URL: {final_url}")
+
+        if status_code != 200:
+            resp.close()
+            raise RuntimeError(f"Server returned HTTP {status_code}")
+
+        try:
+            raw_len = resp.headers.get("Content-Length")
+            total_bytes = 0
+            if raw_len:
+                try:
+                    total_bytes = int(raw_len)
+                except (ValueError, TypeError):
+                    total_bytes = 0
+            received_bytes = 0
+            chunk_size = 65536  # 64 KB
+
+            with open(dest_path, "wb") as f:
+                while True:
+                    if cancel_event and cancel_event.is_set():
+                        f.close()
+                        try:
+                            os.remove(dest_path)
+                        except OSError:
+                            pass
+                        raise RuntimeError("Download cancelled by user")
+
+                    chunk = resp.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    received_bytes += len(chunk)
+
+                    if on_progress:
+                        pct = min(100, int((received_bytes / total_bytes) * 100)) if total_bytes > 0 else 0
+                        on_progress({
+                            "percent": pct,
+                            "received_bytes": received_bytes,
+                            "total_bytes": total_bytes,
+                        })
+        except Exception:
+            try:
+                if os.path.exists(dest_path):
+                    os.remove(dest_path)
+            except OSError:
+                pass
+            raise
+        finally:
+            resp.close()
+
+        break
 
     return dest_path
 
@@ -341,7 +404,11 @@ def download_update_async(
     def _worker():
         try:
             temp_dir = tempfile.gettempdir()
-            filename = f"InputLocker-Update-{int(time.time())}.exe"
+            parsed_path = urllib.parse.urlparse(download_url).path
+            _, ext = os.path.splitext(parsed_path)
+            if not ext or ext.lower() not in (".exe", ".zip", ".msi"):
+                ext = ".exe"
+            filename = f"InputLocker-Update-{int(time.time())}{ext}"
             dest = os.path.join(temp_dir, filename)
 
             res_path = download_file_with_progress(
@@ -369,10 +436,18 @@ def install_update_and_restart(file_path: str, delay_s: float = 0.6) -> bool:
         return False
 
     try:
+        if file_path.lower().endswith(".zip"):
+            if sys.platform == "win32":
+                os.startfile(os.path.dirname(os.path.abspath(file_path)))
+            return True
+
         if sys.platform == "win32":
             # DETACHED_PROCESS = 0x00000008, CREATE_NEW_PROCESS_GROUP = 0x00000200
             flags = 0x00000008 | 0x00000200
-            subprocess.Popen([file_path], creationflags=flags, close_fds=True)
+            if file_path.lower().endswith(".msi"):
+                subprocess.Popen(["msiexec.exe", "/i", file_path], creationflags=flags, close_fds=True)
+            else:
+                subprocess.Popen([file_path], creationflags=flags, close_fds=True)
         else:
             subprocess.Popen([file_path], close_fds=True)
 

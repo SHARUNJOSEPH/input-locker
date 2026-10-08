@@ -12,7 +12,7 @@ import threading
 from typing import Optional, Tuple
 
 from input_locker.overlay.cursor_guard import CursorGuard
-from input_locker.overlay.win32_overlay import Win32Overlay
+from input_locker.overlay.win32_overlay import Win32Overlay, register_raw_touch, unregister_raw_touch
 from input_locker.overlay.pyqt_overlay import PyQtOverlay, PYQT6_AVAILABLE
 
 logger = logging.getLogger(__name__)
@@ -137,6 +137,7 @@ class OverlayManager:
         Surveyed optimal sequence:
         1. Confine and hide cursor (confine_cursor)
         2. Show non-activating overlay (show_overlay)
+        3. Register raw touch/touchpad sink (suppresses PTP Shell gestures at source)
 
         Returns:
             bool: True if both confinement and overlay show succeeded.
@@ -144,19 +145,31 @@ class OverlayManager:
         with self._lock:
             cursor_ok = self.cursor_guard.confine_to_zero()
             overlay_ok = self.overlay.show()
+            # If Win32 backend, ensure raw touch registration is explicitly linked
+            if isinstance(self.overlay, Win32Overlay) and self.overlay.hwnd:
+                try:
+                    register_raw_touch(self.overlay.hwnd)
+                except Exception as exc:
+                    logger.debug("OverlayManager lock register_raw_touch error: %s", exc)
             return cursor_ok and overlay_ok
 
     def unlock(self) -> bool:
         """Executes full unlock deactivation sequence.
 
         Surveyed optimal sequence:
-        1. Hide overlay (hide_overlay)
-        2. Release cursor bounds and restore visibility (release_cursor)
+        1. Release raw touch/touchpad claim (restores normal Windows gestures)
+        2. Hide overlay (hide_overlay)
+        3. Release cursor bounds and restore visibility (release_cursor)
 
         Returns:
             bool: True if both overlay hide and cursor release succeeded.
         """
         with self._lock:
+            if isinstance(self.overlay, Win32Overlay):
+                try:
+                    unregister_raw_touch()
+                except Exception as exc:
+                    logger.debug("OverlayManager unlock unregister_raw_touch error: %s", exc)
             overlay_ok = self.overlay.hide()
             cursor_ok = self.cursor_guard.release()
             return overlay_ok and cursor_ok
@@ -178,8 +191,12 @@ class OverlayManager:
         return self.overlay.get_geometry()
 
     def close(self) -> None:
-        """Cleanly releases cursor confinement and destroys overlay resources."""
+        """Cleanly releases cursor confinement, raw touch registration, and destroys overlay resources."""
         with self._lock:
+            try:
+                unregister_raw_touch()
+            except Exception as exc:
+                logger.debug("OverlayManager close unregister_raw_touch error: %s", exc)
             self.cursor_guard.release()
             self.overlay.close()
 

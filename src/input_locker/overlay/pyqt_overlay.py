@@ -61,7 +61,9 @@ class _ScreenOverlayWidget(QWidget):
         # Crucial widget attributes for zero focus disruption & pass-through
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        # WA_TransparentForMouseEvents must NOT be True, otherwise touch and clicks pass through to background apps!
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
         # Cursor over overlay: default to standard arrow; BlankCursor only when shown
         self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -190,6 +192,27 @@ class _ScreenOverlayWidget(QWidget):
 
         self.update()
 
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        event.accept()
+
+    def mouseMoveEvent(self, event) -> None:  # type: ignore[override]
+        event.accept()
+
+    def mouseReleaseEvent(self, event) -> None:  # type: ignore[override]
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event) -> None:  # type: ignore[override]
+        event.accept()
+
+    def wheelEvent(self, event) -> None:  # type: ignore[override]
+        event.accept()
+
+    def touchEvent(self, event) -> None:  # type: ignore[override]
+        event.accept()
+
+    def tabletEvent(self, event) -> None:  # type: ignore[override]
+        event.accept()
+
 
 _user32 = ctypes.windll.user32
 _user32.SetWindowPos.restype = wintypes.BOOL
@@ -232,22 +255,70 @@ class _OverlayBridge(QObject):
 
     @pyqtSlot()
     def _handle_show(self) -> None:
-        vw = _user32.GetSystemMetrics(0)  # SM_CXSCREEN
-        vh = _user32.GetSystemMetrics(1)  # SM_CYSCREEN
+        # Use virtual screen metrics to cover ALL monitors (not just the primary display)
+        vx = _user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+        vy = _user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
+        vw = _user32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
+        vh = _user32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
+        # Fallback to primary if multi-monitor metrics unavailable
+        if vw <= 0 or vh <= 0:
+            vx, vy = 0, 0
+            vw = _user32.GetSystemMetrics(0)
+            vh = _user32.GetSystemMetrics(1)
+
+        GWL_EXSTYLE     = -20
+        WS_EX_TOOLWINDOW_FLAG = 0x00000080
+
+        _raw_hwnd_list: list = []
         for w in self.widgets:
-            w.setGeometry(0, 0, vw, vh)
+            w.setGeometry(vx, vy, vw, vh)
             w.setCursor(Qt.CursorShape.BlankCursor)
             w.show()
             hwnd = int(w.winId())
+
+            # Strip WS_EX_TOOLWINDOW: this flag tells the Windows Pointer compositor to
+            # deprioritise the window for touch hit-testing.  Removing it means the overlay
+            # is treated as a regular topmost window and wins the pointer hit-test.
+            try:
+                ex_style = _user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                if ex_style and (ex_style & WS_EX_TOOLWINDOW_FLAG):
+                    _user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style & ~WS_EX_TOOLWINDOW_FLAG)
+            except Exception as exc:
+                logger.debug("PyQt strip WS_EX_TOOLWINDOW error: %s", exc)
+
             _user32.SetWindowPos(
                 hwnd, HWND_TOPMOST,
-                0, 0, vw, vh,
+                vx, vy, vw, vh,
                 SWP_NOACTIVATE | SWP_SHOWWINDOW
             )
+            try:
+                if hasattr(_user32, "RegisterTouchWindow"):
+                    _user32.RegisterTouchWindow(hwnd, 0)
+            except Exception as exc:
+                logger.debug("PyQt RegisterTouchWindow error: %s", exc)
+
+            _raw_hwnd_list.append(hwnd)
+
+        # Claim raw HID touch/touchpad reports with RIDEV_NOLEGACY to block the Shell
+        # gesture pipeline (DirectManipulation) from processing multi-finger gestures.
+        # Use the first overlay HWND as the message target; RIDEV_INPUTSINK means it
+        # does not need to be foreground.
+        if _raw_hwnd_list:
+            from input_locker.overlay.win32_overlay import register_raw_touch
+            ok = register_raw_touch(_raw_hwnd_list[0])
+            logger.debug("PyQt register_raw_touch: %s (hwnd=%s)", ok, _raw_hwnd_list[0])
+
         self._is_visible = True
 
     @pyqtSlot()
     def _handle_hide(self) -> None:
+        # Release raw HID touch/touchpad claim so normal Shell gestures are restored
+        try:
+            from input_locker.overlay.win32_overlay import unregister_raw_touch
+            unregister_raw_touch()
+        except Exception as exc:
+            logger.debug("PyQt unregister_raw_touch error: %s", exc)
+
         for w in self.widgets:
             hwnd = int(w.winId())
             _user32.SetWindowPos(
@@ -261,6 +332,11 @@ class _OverlayBridge(QObject):
 
     @pyqtSlot()
     def _handle_close(self) -> None:
+        try:
+            from input_locker.overlay.win32_overlay import unregister_raw_touch
+            unregister_raw_touch()
+        except Exception as exc:
+            logger.debug("PyQt unregister_raw_touch (close) error: %s", exc)
         for w in self.widgets:
             w.close()
         self._is_visible = False
@@ -404,6 +480,16 @@ class PyQtOverlay:
     def is_visible(self) -> bool:
         """Returns whether the overlay is currently marked visible."""
         return self._is_visible
+
+    @property
+    def hwnd(self) -> Optional[int]:
+        """Returns the HWND of the primary overlay widget if created."""
+        if self._widgets:
+            try:
+                return int(self._widgets[0].winId())
+            except Exception:
+                pass
+        return None
 
     def get_geometry(self) -> Tuple[int, int, int, int]:
         """Returns the bounding box encompassing all screens as (x, y, width, height)."""
