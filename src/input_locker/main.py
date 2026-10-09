@@ -156,6 +156,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         single_instance.notify_existing_instance()
         return 0
 
+    # ── Touchpad device safety (elevated disable is opt-in) ───────────────
+    # Re-enable any touchpad left disabled by a crashed previous session, then
+    # start a once-per-session elevated helper (one UAC prompt). Lock/unlock
+    # then disable/enable the device through that helper with no further UAC,
+    # so gestures are cut before the screen is marked LOCKED.
+    try:
+        from input_locker.overlay.touchpad_guard import TouchpadGuard
+        TouchpadGuard.device_control_enabled = True
+        # Start the helper first so crash-recovery re-enable uses it (no second UAC).
+        TouchpadGuard.ensure_elevated_helper()
+        TouchpadGuard.recover_if_stale()
+    except Exception as exc:
+        logger.debug("Touchpad recovery/setup failed: %s", exc)
+
     logger.info("Starting Windows AV Staging Input Locker v%s...", __version__)
     logger.info("Overlay backend: %s (alpha=%d)", args.backend, args.alpha)
 

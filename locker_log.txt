@@ -1,0 +1,111 @@
+[2026-10-09 17:26:22,114] [DEBUG] [input_locker.overlay.win32_overlay] DisableProcessWindowsGhosting invoked successfully
+[2026-10-09 17:26:23,938] [INFO] [input_locker.overlay.touchpad_guard] Touchpad elevated helper started (one UAC for this session)
+[2026-10-09 17:26:23,939] [INFO] [input_locker] Starting Windows AV Staging Input Locker v0.2.9...
+[2026-10-09 17:26:23,939] [INFO] [input_locker] Overlay backend: pyqt (alpha=120)
+[2026-10-09 17:26:23,955] [INFO] [input_locker.core.i18n] Active locale set to: en (English)
+[2026-10-09 17:26:23,955] [INFO] [input_locker.core.i18n] Active locale set to: en (English)
+[2026-10-09 17:26:23,997] [INFO] [input_locker] Lock Hotkey: F11 | Unlock Combo: U (password protected)
+[2026-10-09 17:26:23,998] [INFO] [input_locker] Audio Feedback: Enabled (Acoustic confirmation cues)
+WARNING: QApplication was not created in the main() thread.
+[2026-10-09 17:26:24,361] [DEBUG] [PIL.Image] Importing PngImagePlugin
+[2026-10-09 17:26:24,371] [DEBUG] [PIL.PngImagePlugin] STREAM b'IHDR' 16 13
+[2026-10-09 17:26:24,371] [DEBUG] [PIL.PngImagePlugin] STREAM b'IDAT' 41 65536
+[2026-10-09 17:26:24,425] [DEBUG] [PIL.PngImagePlugin] STREAM b'IHDR' 16 13
+[2026-10-09 17:26:24,425] [DEBUG] [PIL.PngImagePlugin] STREAM b'IDAT' 41 65536
+[2026-10-09 17:26:24,908] [DEBUG] [PIL.PngImagePlugin] STREAM b'IHDR' 16 13
+[2026-10-09 17:26:24,908] [DEBUG] [PIL.PngImagePlugin] STREAM b'caBX' 41 15667
+[2026-10-09 17:26:24,908] [DEBUG] [PIL.PngImagePlugin] b'caBX' 41 15667 (unknown)
+[2026-10-09 17:26:24,908] [DEBUG] [PIL.PngImagePlugin] STREAM b'IDAT' 15720 8192
+[2026-10-09 17:26:25,222] [DEBUG] [PIL.PngImagePlugin] STREAM b'IHDR' 16 13
+[2026-10-09 17:26:25,222] [DEBUG] [PIL.PngImagePlugin] STREAM b'IDAT' 41 7508
+[2026-10-09 17:26:25,230] [INFO] [input_locker.ui.tray_icon] System tray icon started.
+[2026-10-09 17:26:25,265] [DEBUG] [PIL.Image] Importing AvifImagePlugin
+[2026-10-09 17:26:25,270] [DEBUG] [PIL.Image] Importing BlpImagePlugin
+[2026-10-09 17:26:25,273] [DEBUG] [PIL.Image] Importing BmpImagePlugin
+[2026-10-09 17:26:25,274] [DEBUG] [PIL.Image] Importing BufrStubImagePlugin
+[2026-10-09 17:26:25,275] [DEBUG] [PIL.Image] Importing CurImagePlugin
+[2026-10-09 17:26:25,277] [DEBUG] [PIL.Image] Importing DcxImagePlugin
+[2026-10-09 17:26:25,280] [DEBUG] [PIL.Image] Importing DdsImagePlugin
+[2026-10-09 17:26:25,289] [DEBUG] [PIL.Image] Importing EpsImagePlugin
+[2026-10-09 17:26:25,291] [DEBUG] [PIL.Image] Importing FitsImagePlugin
+[2026-10-09 17:26:25,294] [DEBUG] [PIL.Image] Importing FliImagePlugin
+[2026-10-09 17:26:25,296] [DEBUG] [PIL.Image] Importing FpxImagePlugin
+[2026-10-09 17:26:25,298] [DEBUG] [PIL.Image] Image: failed to import FpxImagePlugin: No module named 'olefile'
+[2026-10-09 17:26:25,298] [DEBUG] [PIL.Image] Importing FtexImagePlugin
+[2026-10-09 17:26:25,303] [DEBUG] [PIL.Image] Importing GbrImagePlugin
+[2026-10-09 17:26:25,305] [DEBUG] [PIL.Image] Importing GifImagePlugin
+[2026-10-09 17:26:25,306] [DEBUG] [PIL.Image] Importing GribStubImagePlugin
+[2026-10-09 17:26:25,307] [DEBUG] [PIL.Image] Importing Hdf5StubImagePlugin
+[2026-10-09 17:26:25,308] [DEBUG] [PIL.Image] Importing IcnsImagePlugin
+[2026-10-09 17:26:25,311] [DEBUG] [PIL.Image] Importing IcoImagePlugin
+[2026-10-09 17:26:25,313] [DEBUG] [PIL.Image] Importing ImImagePlugin
+[2026-10-09 17:26:25,316] [DEBUG] [PIL.Image] Importing ImtImagePlugin
+[2026-10-09 17:26:25,318] [DEBUG] [PIL.Image] Importing IptcImagePlugin
+[2026-10-09 17:26:25,320] [DEBUG] [PIL.Image] Importing JpegImagePlugin
+[2026-10-09 17:26:25,320] [DEBUG] [PIL.Image] Importing Jpeg2KImagePlugin
+[2026-10-09 17:26:25,320] [DEBUG] [PIL.Image] Importing McIdasImagePlugin
+[2026-10-09 17:26:25,321] [DEBUG] [PIL.Image] Importing MicImagePlugin
+[2026-10-09 17:26:25,322] [DEBUG] [PIL.Image] Image: failed to import MicImagePlugin: No module named 'olefile'
+[2026-10-09 17:26:25,323] [DEBUG] [PIL.Image] Importing MpegImagePlugin
+[2026-10-09 17:26:25,326] [DEBUG] [PIL.Image] Importing MpoImagePlugin
+[2026-10-09 17:26:25,327] [INFO] [input_locker] Network show control enabled (127.0.0.1): OSC UDP=9000, JSON TCP=9001
+[2026-10-09 17:26:25,327] [INFO] [input_locker.core.controller] Starting LockerController...
+[2026-10-09 17:26:25,330] [DEBUG] [PIL.Image] Importing MspImagePlugin
+[2026-10-09 17:26:25,331] [DEBUG] [PIL.Image] Importing PalmImagePlugin
+[2026-10-09 17:26:25,333] [DEBUG] [PIL.Image] Importing PcdImagePlugin
+[2026-10-09 17:26:25,334] [DEBUG] [PIL.Image] Importing PcxImagePlugin
+[2026-10-09 17:26:25,334] [DEBUG] [PIL.Image] Importing PdfImagePlugin
+[2026-10-09 17:26:25,344] [DEBUG] [PIL.Image] Importing PixarImagePlugin
+[2026-10-09 17:26:25,345] [DEBUG] [PIL.Image] Importing PngImagePlugin
+[2026-10-09 17:26:25,345] [DEBUG] [PIL.Image] Importing PpmImagePlugin
+[2026-10-09 17:26:25,345] [DEBUG] [PIL.Image] Importing PsdImagePlugin
+[2026-10-09 17:26:25,346] [DEBUG] [PIL.Image] Importing QoiImagePlugin
+[2026-10-09 17:26:25,347] [DEBUG] [PIL.Image] Importing SgiImagePlugin
+[2026-10-09 17:26:25,348] [DEBUG] [PIL.Image] Importing SpiderImagePlugin
+[2026-10-09 17:26:25,349] [DEBUG] [PIL.Image] Importing SunImagePlugin
+[2026-10-09 17:26:25,350] [DEBUG] [PIL.Image] Importing TgaImagePlugin
+[2026-10-09 17:26:25,351] [DEBUG] [PIL.Image] Importing TiffImagePlugin
+[2026-10-09 17:26:25,351] [DEBUG] [PIL.Image] Importing WebPImagePlugin
+[2026-10-09 17:26:25,354] [DEBUG] [PIL.Image] Importing WmfImagePlugin
+[2026-10-09 17:26:25,355] [DEBUG] [PIL.Image] Importing XbmImagePlugin
+[2026-10-09 17:26:25,357] [DEBUG] [PIL.Image] Importing XpmImagePlugin
+[2026-10-09 17:26:25,358] [DEBUG] [PIL.Image] Importing XVThumbImagePlugin
+[2026-10-09 17:26:25,365] [INFO] [input_locker.hooks.hook_manager] Starting desktop-attached keyboard and mouse listeners...
+[2026-10-09 17:26:25,366] [DEBUG] [input_locker.hooks.hook_manager] Successfully attached thread to input desktop (handle=1732)
+[2026-10-09 17:26:25,367] [DEBUG] [input_locker.hooks.hook_manager] Successfully attached thread to input desktop (handle=1752)
+[2026-10-09 17:26:25,367] [INFO] [input_locker.hooks.hook_manager] HookManager started successfully.
+[2026-10-09 17:26:25,367] [DEBUG] [input_locker.overlay.pyqt_overlay] PyQtOverlay show signal emitted
+[2026-10-09 17:26:25,829] [DEBUG] [input_locker.overlay.pyqt_overlay] PyQtOverlay hide signal emitted
+[2026-10-09 17:26:25,829] [DEBUG] [input_locker.overlay.cursor_guard] Cursor successfully confined to (0, 0) and hidden
+[2026-10-09 17:26:25,830] [DEBUG] [input_locker.overlay.cursor_guard] Cursor confinement released and cursor visibility restored
+[2026-10-09 17:26:25,831] [DEBUG] [input_locker.overlay.win32_overlay] PKEY_EdgeGesture_DisableTouchWhenFullscreen set successfully on hwnd=3214170
+[2026-10-09 17:26:25,831] [DEBUG] [input_locker.overlay.pyqt_overlay] PyQt register_raw_touch: True (hwnd=3214170)
+[2026-10-09 17:26:25,880] [INFO] [input_locker.core.controller] LockerController started successfully.
+[2026-10-09 17:26:25,881] [DEBUG] [asyncio] Using proactor: IocpProactor
+[2026-10-09 17:26:25,883] [INFO] [input_locker.network.server] NetworkServer listening on TCP port 9001, UDP port 9000 (host: 127.0.0.1)
+[2026-10-09 17:26:26,096] [INFO] [input_locker.core.controller] Executing Lock activation sequence...
+[2026-10-09 17:26:26,096] [INFO] [input_locker.core.state_machine] State changed: UNLOCKED -> LOCKING (0.013 ms)
+[2026-10-09 17:26:26,097] [INFO] [input_locker.hooks.hook_manager] Hook swallowing state updated: swallow_active=True
+[2026-10-09 17:26:26,836] [DEBUG] [input_locker.updater] Update check callback failed: main thread is not in main loop
+[2026-10-09 17:26:28,062] [INFO] [input_locker.overlay.touchpad_guard] Touchpad candidate: class=HIDClass name=AlpsAlpine Virtual HID Device id=HID\VID_044E&PID_1212&COL01\6&1E6E1CE&0&0000
+[2026-10-09 17:26:28,062] [INFO] [input_locker.overlay.touchpad_guard] Touchpad candidate: class=HIDClass name=Dell Touchpad id=HID\DELL081C&COL03\5&7F46077&0&0002
+[2026-10-09 17:26:28,062] [INFO] [input_locker.overlay.touchpad_guard] Touchpad candidate: class=HIDClass name=HID-compliant touch pad id=HID\DELL081C&COL02\5&7F46077&0&0001
+[2026-10-09 17:26:31,867] [INFO] [input_locker.overlay.touchpad_guard] Touchpad disable sent via elevated helper
+[2026-10-09 17:26:35,688] [INFO] [input_locker.overlay.touchpad_guard] Touchpad cut result: id=HID\VID_044E&PID_1212&COL01\6&1E6E1CE&0&0000 status=OK
+[2026-10-09 17:26:35,688] [INFO] [input_locker.overlay.touchpad_guard] Touchpad cut result: id=HID\DELL081C&COL03\5&7F46077&0&0002 status=OK
+[2026-10-09 17:26:35,688] [INFO] [input_locker.overlay.touchpad_guard] Touchpad cut result: id=HID\DELL081C&COL02\5&7F46077&0&0001 status=Error
+[2026-10-09 17:26:35,689] [INFO] [input_locker.overlay.touchpad_guard] Touchpad device(s) disabled: 1 of 3
+[2026-10-09 17:26:35,691] [INFO] [input_locker.overlay.touchpad_guard] Precision Touchpad and gestures cut successfully
+[2026-10-09 17:26:35,705] [DEBUG] [input_locker.overlay.cursor_guard] Cursor successfully confined to (0, 0) and hidden
+[2026-10-09 17:26:35,737] [DEBUG] [input_locker.overlay.pyqt_overlay] PyQtOverlay show signal emitted
+[2026-10-09 17:26:35,738] [INFO] [input_locker.core.state_machine] State changed: LOCKING -> LOCKED (0.005 ms)
+[2026-10-09 17:26:35,738] [INFO] [input_locker.core.controller] Lock sequence completed in 9641.850 ms (Budget < 200 ms)
+[2026-10-09 17:26:35,741] [DEBUG] [input_locker.overlay.win32_overlay] PKEY_EdgeGesture_DisableTouchWhenFullscreen set successfully on hwnd=3214170
+[2026-10-09 17:26:35,741] [DEBUG] [input_locker.overlay.pyqt_overlay] PyQt register_raw_touch: True (hwnd=3214170)
+[2026-10-09 17:26:35,761] [DEBUG] [PIL.PngImagePlugin] STREAM b'IHDR' 16 13
+[2026-10-09 17:26:35,761] [DEBUG] [PIL.PngImagePlugin] STREAM b'IDAT' 41 7497
+[2026-10-09 17:26:35,793] [INFO] [input_locker] Input Locker is ACTIVE — Screen is LOCKED.
+[2026-10-09 17:26:35,822] [DEBUG] [PIL.PngImagePlugin] STREAM b'IHDR' 16 13
+[2026-10-09 17:26:35,822] [DEBUG] [PIL.PngImagePlugin] STREAM b'IDAT' 41 65536
+[2026-10-09 17:26:35,911] [DEBUG] [PIL.PngImagePlugin] STREAM b'IHDR' 16 13
+[2026-10-09 17:26:35,911] [DEBUG] [PIL.PngImagePlugin] STREAM b'IDAT' 41 65536

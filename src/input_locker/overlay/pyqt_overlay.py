@@ -300,16 +300,11 @@ class _OverlayBridge(QObject):
 
     @pyqtSlot()
     def _handle_show(self) -> None:
-        # Use virtual screen metrics to cover ALL monitors (not just the primary display)
-        vx = _user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
-        vy = _user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
-        vw = _user32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
-        vh = _user32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
-        # Fallback to primary if multi-monitor metrics unavailable
-        if vw <= 0 or vh <= 0:
-            vx, vy = 0, 0
-            vw = _user32.GetSystemMetrics(0)
-            vh = _user32.GetSystemMetrics(1)
+        # Cover the PRIMARY monitor only. Secondary displays stay usable.
+        # The primary monitor always sits at (0, 0) in Windows coordinates.
+        vx, vy = 0, 0
+        vw = _user32.GetSystemMetrics(0)  # SM_CXSCREEN
+        vh = _user32.GetSystemMetrics(1)  # SM_CYSCREEN
 
         GWL_EXSTYLE     = -20
         WS_EX_TOOLWINDOW_FLAG = 0x00000080
