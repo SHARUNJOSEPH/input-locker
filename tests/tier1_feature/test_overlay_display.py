@@ -51,10 +51,10 @@ class TestOverlayDisplayFeature:
         assert bool(ex_style & WS_EX_LAYERED), "Overlay missing WS_EX_LAYERED style"
 
     def test_overlay_hit_test_transparency(self, overlay_manager: OverlayManager):
-        """Verify overlay window has WS_EX_TRANSPARENT style for mouse click pass-through."""
+        """Verify overlay window does NOT have WS_EX_TRANSPARENT style so touch/clicks are absorbed."""
         overlay_manager.show_overlay()
         ex_style = overlay_manager.overlay.get_ex_style()
-        assert bool(ex_style & WS_EX_TRANSPARENT), "Overlay missing WS_EX_TRANSPARENT style"
+        assert (ex_style & WS_EX_TRANSPARENT) == 0, "Overlay must not have WS_EX_TRANSPARENT style"
 
     def test_overlay_toolwindow_style(self, overlay_manager: OverlayManager):
         """Verify overlay window has WS_EX_TOOLWINDOW style (hidden from taskbar / Alt+Tab)."""

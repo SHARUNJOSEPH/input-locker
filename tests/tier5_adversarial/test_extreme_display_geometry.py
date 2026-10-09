@@ -6,7 +6,7 @@ Adversarial stress-testing of visual overlay and cursor clipping under:
 - Minimal 1x1 / boundary screen geometries
 - Alpha transparency extreme boundaries (< 0, > 255, float inputs)
 - Multi-cycle window recreation churn without GDI/HWND leaks
-- Extended window styles (WS_EX_NOACTIVATE, WS_EX_TRANSPARENT, WS_EX_TOPMOST) retention
+- Extended window styles (WS_EX_NOACTIVATE, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST) retention without WS_EX_TRANSPARENT
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ class TestExtremeDisplayGeometry:
                 # Extended styles must remain intact
                 ex_style = overlay.get_ex_style()
                 assert (ex_style & WS_EX_NOACTIVATE) != 0
-                assert (ex_style & WS_EX_TRANSPARENT) != 0
+                assert (ex_style & WS_EX_TRANSPARENT) == 0
                 assert (ex_style & WS_EX_TOPMOST) != 0
 
                 hide_success = overlay.hide()
@@ -150,9 +150,9 @@ class TestExtremeDisplayGeometry:
             guard.release()
 
     def test_extended_window_styles_constant_compliance(self) -> None:
-        """Verify the OVERLAY_EX_STYLE bitmask precisely includes all required styles."""
+        """Verify the OVERLAY_EX_STYLE bitmask precisely includes required styles and omits WS_EX_TRANSPARENT."""
         assert OVERLAY_EX_STYLE & WS_EX_NOACTIVATE == WS_EX_NOACTIVATE
-        assert OVERLAY_EX_STYLE & WS_EX_TRANSPARENT == WS_EX_TRANSPARENT
+        assert OVERLAY_EX_STYLE & WS_EX_TRANSPARENT == 0
         assert OVERLAY_EX_STYLE & WS_EX_LAYERED == WS_EX_LAYERED
         assert OVERLAY_EX_STYLE & WS_EX_TOOLWINDOW == WS_EX_TOOLWINDOW
         assert OVERLAY_EX_STYLE & WS_EX_TOPMOST == WS_EX_TOPMOST

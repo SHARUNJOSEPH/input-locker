@@ -551,6 +551,42 @@ class TestEventFilterResilienceAndEdgeCases:
             assert res is True
             mock_kb.suppress_event.assert_not_called()
 
+    def test_gesture_shortcuts_swallowed_and_unlock_hotkey_preserved(self) -> None:
+        """Verify touchpad gesture combinations are swallowed, but unlock hotkey triggers successfully."""
+        unlock_triggered = []
+        ef = EventFilter(
+            on_unlock_hotkey=lambda: unlock_triggered.append(True),
+            swallow_active=True,
+        )
+        mock_kb = MagicMock()
+        ef.set_listeners(keyboard_listener=mock_kb)
+
+        # 1. Simulate 3-finger swipe down gesture (Win+D)
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # LWIN
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x44))  # 'D'
+        mock_kb.suppress_event.assert_called_once()
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x44))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x5B))
+
+        # 2. Simulate 4-finger swipe gesture (Ctrl+Win+Left)
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x11))  # Ctrl
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x5B))  # Win
+        mock_kb.reset_mock()
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(0x25))  # Left
+        mock_kb.suppress_event.assert_called_once()
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x25))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x5B))
+        ef.keyboard_event_filter(WM_KEYUP, MockEventData(0x11))
+
+        # 3. Simulate unlock hotkey: Ctrl + Alt + Shift + U
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(VK_CONTROL))
+        ef.keyboard_event_filter(WM_SYSKEYDOWN, MockEventData(VK_MENU))
+        ef.keyboard_event_filter(WM_KEYDOWN, MockEventData(VK_SHIFT))
+        ef.keyboard_event_filter(WM_SYSKEYDOWN, MockEventData(VK_U))
+
+        assert len(unlock_triggered) == 1, "Unlock hotkey must be detected and trigger callback"
+
     def test_win_l_neutralization_order_independent(self) -> None:
         """Verify Win+L workstation lock is neutralized regardless of whether Win or L is pressed first."""
         from unittest.mock import patch

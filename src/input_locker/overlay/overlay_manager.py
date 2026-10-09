@@ -174,10 +174,10 @@ class OverlayManager:
             bool: True if both overlay hide and cursor release succeeded.
         """
         with self._lock:
-                try:
-                    unregister_raw_touch()
-                except Exception as exc:
-                    logger.debug("OverlayManager unlock unregister_raw_touch error: %s", exc)
+            try:
+                unregister_raw_touch()
+            except Exception as exc:
+                logger.debug("OverlayManager unlock unregister_raw_touch error: %s", exc)
             overlay_ok = self.overlay.hide()
             cursor_ok = self.cursor_guard.release()
             return overlay_ok and cursor_ok

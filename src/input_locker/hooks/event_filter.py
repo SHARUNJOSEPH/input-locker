@@ -448,10 +448,8 @@ class EventFilter:
             or is_pending_keyup
             or is_task_switch
         )
-        flags = getattr(data, "flags", 0) or 0
-        is_injected_escape = bool((flags & 0x10) and vk == 0x1B)
 
-        if should_swallow and not is_injected_escape:
+        if should_swallow:
             self.suppress_keyboard()
 
         return True

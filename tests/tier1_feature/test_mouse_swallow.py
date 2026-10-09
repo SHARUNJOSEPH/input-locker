@@ -98,6 +98,7 @@ class TestMouseSwallowFeature:
 
         hook_mgr = HookManager(swallow_active=True)
         hook_mgr.start()
+        time.sleep(0.05)
         try:
             InputInjector.mouse_move_relative(dx=10, dy=10)
             time.sleep(0.05)
