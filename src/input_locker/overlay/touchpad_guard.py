@@ -303,6 +303,8 @@ class TouchpadGuard:
     _disabled_device_ids: List[str] = []
     _device_worker = None
     _helper_started: bool = False
+    # Pre-discovered at startup so lock does not wait on Get-PnpDevice.
+    _cached_touchpad_ids: List[str] = []
 
     @classmethod
     def is_cut(cls) -> bool:
@@ -477,11 +479,12 @@ class TouchpadGuard:
             cls._is_cut = True
 
             # 3. Disable the touchpad device itself (elevated, opt-in).
-            # Prefer the session helper (instant). Fall back to a one-shot UAC
-            # launch if the helper is not running. Runs synchronously so LOCKED
-            # is only reached after gestures are cut — closes the swipe gap.
+            # Registry cut above is near-instant; PnP discovery + Disable-PnpDevice
+            # can take several seconds, so run that on a background thread so the
+            # lock overlay can appear immediately. Unlock joins the worker before
+            # restoring so we never re-enable mid-cut.
             if cls.device_control_enabled:
-                cls._cut_devices()
+                cls._start_device_cut_async()
 
             # 4. Broadcast WM_SETTINGCHANGE so Windows Shell applies it immediately
             cls._notify_system()
@@ -550,9 +553,39 @@ class TouchpadGuard:
     def recover_if_stale(cls) -> bool:
         """Re-enable touchpad devices left disabled by a previous crashed session.
 
-        Call once at startup, before any lock happens.
+        Call once at startup, before any lock happens. Combines:
+        1. Instance IDs recorded in the crash-recovery state file.
+        2. Any present touchpad-like device whose Status is not OK (e.g. Error /
+           Disabled) — covers the case where the process was killed before the
+           state file was written, or only a subset was recorded.
         """
-        ids = _read_state()
+        ids = list(_read_state())
+        known = set(ids)
+
+        # Also hunt for currently-disabled touchpad devices so a hard kill
+        # (Alt+F4 on the console, Task Manager End Task) never leaves the
+        # touchpad permanently dead.
+        try:
+            class_filter = "|".join(_TOUCHPAD_CLASSES)
+            script = (
+                "Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | "
+                "Where-Object { "
+                "$_.Status -ne 'OK' -and "
+                "$_.FriendlyName -match '" + _TOUCHPAD_MATCH + "' -and "
+                "$_.FriendlyName -notmatch '" + _TOUCHSCREEN_MATCH + "' -and "
+                "$_.Class -match '^(" + class_filter + ")$' "
+                "} | ForEach-Object { $_.InstanceId }"
+            )
+            result = _run_powershell(script, elevated=False, timeout=30)
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line and line not in known:
+                    ids.append(line)
+                    known.add(line)
+                    logger.warning("Found stuck-disabled touchpad device: %s", line)
+        except Exception as exc:
+            logger.debug("Stuck-touchpad scan failed: %s", exc)
+
         if not ids:
             return True
         logger.warning(
@@ -579,15 +612,39 @@ class TouchpadGuard:
         cls._device_worker = None
 
     @classmethod
+    def warm_device_cache(cls) -> List[str]:
+        """Pre-discover touchpad instance IDs so the first lock is not blocked on PnP.
+
+        Safe to call at startup (non-elevated). Returns the cached ID list.
+        """
+        if cls._cached_touchpad_ids:
+            return list(cls._cached_touchpad_ids)
+        try:
+            ids = _find_touchpad_ids()
+        except Exception as exc:
+            logger.warning("Touchpad device cache warm-up failed: %s", exc)
+            return []
+        cls._cached_touchpad_ids = list(ids)
+        if ids:
+            logger.info("Touchpad device cache warmed: %d candidate(s)", len(ids))
+        else:
+            logger.info("Touchpad device cache warmed: no candidates found")
+        return list(ids)
+
+    @classmethod
     def _cut_devices(cls) -> None:
         """Disable the touchpad device(s). Prefer the session helper; else one-shot UAC."""
         if cls._disabled_device_ids:
             return  # already cut
-        try:
-            ids = _find_touchpad_ids()
-        except Exception as exc:
-            logger.warning("Touchpad device lookup failed: %s", exc)
-            return
+        ids = list(cls._cached_touchpad_ids)
+        if not ids:
+            try:
+                ids = _find_touchpad_ids()
+            except Exception as exc:
+                logger.warning("Touchpad device lookup failed: %s", exc)
+                return
+            if ids:
+                cls._cached_touchpad_ids = list(ids)
         if not ids:
             logger.info("No active touchpad device found; relying on registry cut only")
             return
@@ -609,6 +666,14 @@ class TouchpadGuard:
                 logger.warning("Elevated touchpad disable did not complete: %s", exc)
                 cls._disabled_device_ids = ids
                 return
+
+        # Helper ack already means Disable-PnpDevice ran; skip a second Get-PnpDevice
+        # status round-trip when we can (saves ~1–4 s on the background worker).
+        if used_helper:
+            cls._disabled_device_ids = list(ids)
+            _write_state(ids)
+            logger.info("Touchpad device(s) disabled via helper: %d", len(ids))
+            return
 
         statuses = _device_statuses(ids)
         still_active = [i for i, st in statuses.items() if st == "OK"]

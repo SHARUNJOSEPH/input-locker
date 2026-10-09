@@ -159,14 +159,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     # ── Touchpad device safety (elevated disable is opt-in) ───────────────
     # Re-enable any touchpad left disabled by a crashed previous session, then
     # start a once-per-session elevated helper (one UAC prompt). Lock/unlock
-    # then disable/enable the device through that helper with no further UAC,
-    # so gestures are cut before the screen is marked LOCKED.
+    # then disable/enable the device through that helper with no further UAC.
+    # Device cut runs in the background after the overlay appears so lock feels
+    # instant; warm the PnP ID cache here so that background cut is also fast.
     try:
         from input_locker.overlay.touchpad_guard import TouchpadGuard
         TouchpadGuard.device_control_enabled = True
         # Start the helper first so crash-recovery re-enable uses it (no second UAC).
         TouchpadGuard.ensure_elevated_helper()
         TouchpadGuard.recover_if_stale()
+        TouchpadGuard.warm_device_cache()
     except Exception as exc:
         logger.debug("Touchpad recovery/setup failed: %s", exc)
 

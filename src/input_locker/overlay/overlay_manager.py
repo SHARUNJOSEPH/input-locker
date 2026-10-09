@@ -196,6 +196,17 @@ class OverlayManager:
 
     def get_geometry(self) -> Tuple[int, int, int, int]:
         """Returns the virtual screen / overlay geometry as (x, y, width, height)."""
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            vw = int(user32.GetSystemMetrics(78))  # SM_CXVIRTUALSCREEN
+            vh = int(user32.GetSystemMetrics(79))  # SM_CYVIRTUALSCREEN
+            if vw > 0 and vh > 0:
+                vx = int(user32.GetSystemMetrics(76))  # SM_XVIRTUALSCREEN
+                vy = int(user32.GetSystemMetrics(77))  # SM_YVIRTUALSCREEN
+                return (vx, vy, vw, vh)
+        except Exception:
+            pass
         return self.overlay.get_geometry()
 
     def close(self) -> None:

@@ -306,15 +306,16 @@ class LockerController:
             logger.info("LockerController stopped cleanly.")
 
     def lock(self) -> bool:
-        """Execute the 5-step atomic lock activation sequence.
-        
+        """Execute the atomic lock activation sequence.
+
         Sequence:
         1. Set state to LOCKING
         2. Enable hook swallowing (hook_manager.set_swallow(True))
         3. Confine cursor to (0, 0) (overlay_manager.confine_cursor())
-        4. Show overlay (overlay_manager.show_overlay())
-        5. Set state to LOCKED
-        
+        4. Show overlay (overlay_manager.show_overlay()) — before slow PnP work
+        5. Cut Precision Touchpad (registry sync; device disable async)
+        6. Set state to LOCKED
+
         Returns:
             bool: True if lock succeeded or was already locked (idempotent).
         """
@@ -335,23 +336,24 @@ class LockerController:
                 self.hook_manager.set_swallow(True)
                 _set_disable_lock_workstation(True)
 
-                # Step 2b: Cut Precision Touchpad + multi-finger Shell gestures at source.
-                # LockerController historically called show_overlay()/confine_cursor()
-                # directly and skipped OverlayManager.lock(), so TouchpadGuard never ran
-                # and 3/4-finger trackpad gestures kept working while "locked".
+                # Step 3: Confine cursor to (0, 0) and hide cursor shape
+                self.overlay_manager.confine_cursor()
+                self._start_watchdog()
+
+                # Step 4: Display non-activating glass overlay FIRST so the user
+                # sees the lock screen immediately. Touchpad PnP disable used to
+                # run here synchronously and delayed overlay show by several seconds.
+                self.overlay_manager.show_overlay()
+
+                # Step 5: Cut Precision Touchpad + multi-finger Shell gestures.
+                # Registry cut is sync/near-instant; device disable runs async
+                # inside cut_touchpad() so it cannot stall overlay appearance.
                 try:
                     TouchpadGuard.cut_touchpad()
                 except Exception as exc:
                     logger.debug("TouchpadGuard cut during lock failed: %s", exc)
 
-                # Step 3: Confine cursor to (0, 0) and hide cursor shape
-                self.overlay_manager.confine_cursor()
-                self._start_watchdog()
-
-                # Step 4: Display non-activating glass overlay
-                self.overlay_manager.show_overlay()
-
-                # Step 5: Transition state machine to LOCKED
+                # Step 6: Transition state machine to LOCKED
                 self.state_machine.transition_to(LockerState.LOCKED)
 
                 t1 = time.perf_counter()
