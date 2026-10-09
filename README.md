@@ -23,7 +23,7 @@
     <img src="https://img.shields.io/badge/🚀%20Roadmap-Releases%20%26%20Backlog-4F46E5?style=for-the-badge&logo=github&logoColor=white" alt="Roadmap & Releases" />
   </a>
   <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
-    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.8-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
+    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.9-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
   </a>
 </p>
 
@@ -62,8 +62,8 @@ A high-performance, zero-latency background utility engineered for Windows live 
 
 | Package | Format | Architecture | Download Link |
 | :--- | :---: | :---: | :--- |
-| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.8.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.8/InputLocker-Setup-v0.2.8.exe) |
-| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.8-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.8/InputLocker-v0.2.8-Windows-x64.zip) |
+| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.9.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.9/InputLocker-Setup-v0.2.9.exe) |
+| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.9-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.9/InputLocker-v0.2.9-Windows-x64.zip) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 
 ### ⚡ Command-Line Install (`winget`)

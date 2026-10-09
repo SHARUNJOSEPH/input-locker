@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.9] - 2026-10-09
+
+### Added
+- **Precision Touchpad Hardware Guard**: New `TouchpadGuard` disables user-scoped PTP multi-finger gesture toggles (3-/4-/5-finger slide & tap) via HKCU registry + `WM_SETTINGCHANGE` while locked, with atexit fail-safe restore.
+- **Task View Watchdog**: Narrow-class dismisser for `XamlExplorerHostIslandWindow` / `MultitaskingViewFrame` so residual 3-finger swipe-up cannot expose staging apps.
+- **Raw Touch / Edge-Gesture Hardening**: Stronger overlay raw-input registration, edge-gesture property suppression, and anti-hide protection while locked.
+
+### Fixed
+- **Single-Owner Touchpad Lifecycle**: `LockerController` now exclusively owns cut/restore; `OverlayManager` no longer double-toggles PTP state.
+- **Watchdog Focus Safety**: Dropped broad `ApplicationFrameWindow` / empty-title `CoreWindow` matching that could disrupt UWP staging apps or password entry.
+- **Injected Escape Passthrough**: Injected `VK_ESCAPE` used to dismiss Task View is no longer swallowed by the keyboard hook.
+
 ## [0.2.8] - 2026-10-07
 
 ### Added

@@ -37,7 +37,7 @@ def compute_blockmap_for_file(file_path: Path, rel_name: str) -> tuple[int, int,
 
 def build_msix_package(
     project_root: Path,
-    version: str = "0.2.8",
+    version: str = "0.2.9",
     output_dir: Path | None = None,
 ) -> Path:
     """Stage, block-hash, assemble, and validate the MSIX package."""
@@ -151,7 +151,7 @@ def build_msix_package(
     return msix_path
 
 
-def validate_msix_package(msix_path: Path, expected_version: str = "0.2.8") -> None:
+def validate_msix_package(msix_path: Path, expected_version: str = "0.2.9") -> None:
     """Validate integrity, manifest identity, block map, and internal structure of the MSIX package."""
     assert msix_path.is_file(), f"MSIX file not found: {msix_path}"
     with zipfile.ZipFile(msix_path, "r") as zf:
@@ -194,7 +194,7 @@ def validate_msix_package(msix_path: Path, expected_version: str = "0.2.8") -> N
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent.parent
-    ver = "0.2.8"
+    ver = "0.2.9"
     if len(sys.argv) > 1:
         ver = sys.argv[1].lstrip("v")
     build_msix_package(root, version=ver)

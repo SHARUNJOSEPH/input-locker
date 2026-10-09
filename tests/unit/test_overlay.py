@@ -32,6 +32,25 @@ from input_locker.overlay.win32_overlay import (
     SM_YVIRTUALSCREEN,
     SM_CXVIRTUALSCREEN,
     SM_CYVIRTUALSCREEN,
+    WM_SHOWWINDOW,
+    WM_WINDOWPOSCHANGING,
+    WM_SYSCOMMAND,
+    SC_MINIMIZE,
+    WM_MOUSEACTIVATE,
+    MA_NOACTIVATEANDEAT,
+    WM_POINTERACTIVATE,
+    PA_NOACTIVATE,
+    WM_TOUCHHITTESTING,
+    HTCLIENT,
+    WINDOWPOS,
+    HWND_TOPMOST,
+    SWP_HIDEWINDOW,
+    disable_edge_gestures,
+    set_overlay_locked,
+    is_overlay_locked,
+    disable_process_windows_ghosting,
+    _global_overlay_wndproc,
+    WM_NCHITTEST,
 )
 from input_locker.overlay.pyqt_overlay import PyQtOverlay, PYQT6_AVAILABLE
 from input_locker.overlay.overlay_manager import OverlayManager
@@ -152,21 +171,28 @@ class TestWin32Overlay:
 
     def test_win32_overlay_wndproc_absorbs_pointer_and_touch(self):
         """Verifies wndproc returns HTCLIENT, MA_NOACTIVATEANDEAT, and absorbs touch/pointer events."""
-        from input_locker.overlay.win32_overlay import _global_overlay_wndproc, WM_NCHITTEST
-
         # 1. Hit testing must return HTCLIENT (1) so pointer events hit the overlay and do not fall through
         res = _global_overlay_wndproc(0, WM_NCHITTEST, 0, 0)
-        assert res == 1
+        assert res == HTCLIENT
 
         # 2. Mouse activation must return MA_NOACTIVATEANDEAT (3) to prevent focus theft and swallow clicks
-        res = _global_overlay_wndproc(0, 0x0021, 0, 0)
-        assert res == 3
+        res = _global_overlay_wndproc(0, WM_MOUSEACTIVATE, 0, 0)
+        assert res == MA_NOACTIVATEANDEAT
 
-        # 3. Touch, pointer, drag, and mouse click messages must return 0 (consumed)
+        # 3. WM_TOUCHHITTESTING must return HTCLIENT (1) for deterministic touchscreen touch absorption
+        res = _global_overlay_wndproc(0, WM_TOUCHHITTESTING, 0, 0)
+        assert res == HTCLIENT
+
+        # 4. WM_POINTERACTIVATE must return PA_NOACTIVATE (3) to prevent activating on pointer touch
+        res = _global_overlay_wndproc(0, WM_POINTERACTIVATE, 0, 0)
+        assert res == PA_NOACTIVATE
+
+        # 5. Touch, pointer, drag, and mouse click messages must return 0 (consumed)
         absorbed_msgs = (
             0x0119,  # WM_GESTURE
             0x0240,  # WM_TOUCH
-            0x0245, 0x0246, 0x0247, 0x024D,  # WM_POINTER*
+            0x0241, 0x0242, 0x0243, 0x0245, 0x0246, 0x0247, 0x0249, 0x024A, 0x024C,  # WM_POINTER*
+            0x0252, 0x0253,  # WM_POINTERWHEEL, WM_POINTERHWHEEL
             0x0200, 0x0201, 0x0202,  # WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP
             0x0204, 0x0205, 0x020A, 0x007B,  # WM_RBUTTON*, WM_MOUSEWHEEL, WM_CONTEXTMENU
         )
@@ -174,7 +200,7 @@ class TestWin32Overlay:
             res = _global_overlay_wndproc(0, msg_id, 0, 0)
             assert res == 0
 
-        # 4. WM_TOUCH and WM_GESTURE must close unmanaged handles when lparam is passed
+        # 6. WM_TOUCH and WM_GESTURE must close unmanaged handles when lparam is passed
         from unittest.mock import patch
         with patch("input_locker.overlay.win32_overlay._user32.CloseTouchInputHandle") as mock_close_touch:
             res = _global_overlay_wndproc(0, 0x0240, 0, 9999)
@@ -185,6 +211,88 @@ class TestWin32Overlay:
             res = _global_overlay_wndproc(0, 0x0119, 0, 8888)
             assert res == 0
             mock_close_gesture.assert_called_once_with(8888)
+
+    def test_win32_overlay_wndproc_anti_minimize_sc_minimize(self):
+        """Verifies WM_SYSCOMMAND with SC_MINIMIZE is consumed (returns 0) without DefWindowProcW."""
+        with patch("input_locker.overlay.win32_overlay._user32.DefWindowProcW") as mock_def_proc:
+            # SC_MINIMIZE (0xF020)
+            res = _global_overlay_wndproc(1234, WM_SYSCOMMAND, SC_MINIMIZE, 0)
+            assert res == 0
+            mock_def_proc.assert_not_called()
+
+            # SC_MINIMIZE with lower 4 bits set (e.g. 0xF022) must also be caught
+            res = _global_overlay_wndproc(1234, WM_SYSCOMMAND, 0xF022, 0)
+            assert res == 0
+            mock_def_proc.assert_not_called()
+
+            # Non-minimize syscommand (e.g. SC_RESTORE = 0xF120) falls through
+            mock_def_proc.return_value = 42
+            res = _global_overlay_wndproc(1234, WM_SYSCOMMAND, 0xF120, 0)
+            mock_def_proc.assert_called_once_with(1234, WM_SYSCOMMAND, 0xF120, 0)
+            assert res == 42
+
+    def test_win32_overlay_wndproc_windowposchanging_strips_hide(self):
+        """Verifies WM_WINDOWPOSCHANGING strips SWP_HIDEWINDOW and forces HWND_TOPMOST while locked."""
+        try:
+            set_overlay_locked(True)
+            wp = WINDOWPOS()
+            wp.hwnd = 5678
+            wp.hwndInsertAfter = 0
+            wp.flags = SWP_HIDEWINDOW | 0x0001  # SWP_HIDEWINDOW | SWP_NOSIZE
+
+            res = _global_overlay_wndproc(5678, WM_WINDOWPOSCHANGING, 0, ctypes.addressof(wp))
+            assert res == 0
+            # SWP_HIDEWINDOW must be stripped
+            assert (wp.flags & SWP_HIDEWINDOW) == 0
+            # hwndInsertAfter must be HWND_TOPMOST (-1)
+            assert ctypes.c_int64(wp.hwndInsertAfter).value == HWND_TOPMOST
+
+            # When unlocked, SWP_HIDEWINDOW must NOT be stripped
+            set_overlay_locked(False)
+            wp_unlocked = WINDOWPOS()
+            wp_unlocked.flags = SWP_HIDEWINDOW | 0x0001
+            res = _global_overlay_wndproc(5678, WM_WINDOWPOSCHANGING, 0, ctypes.addressof(wp_unlocked))
+            assert (wp_unlocked.flags & SWP_HIDEWINDOW) == SWP_HIDEWINDOW
+        finally:
+            set_overlay_locked(True)
+
+    def test_win32_overlay_wndproc_showwindow_rejects_hide_when_locked(self):
+        """Verifies WM_SHOWWINDOW rejects hiding (wParam=0) while locked and reasserts topmost."""
+        try:
+            set_overlay_locked(True)
+            with patch("input_locker.overlay.win32_overlay._user32.SetWindowPos") as mock_set_pos:
+                mock_set_pos.return_value = 1
+                # wParam == 0 indicates window is being hidden
+                res = _global_overlay_wndproc(9999, WM_SHOWWINDOW, 0, 0)
+                assert res == 0
+                mock_set_pos.assert_called_once()
+                call_args = mock_set_pos.call_args[0]
+                assert call_args[0] == 9999
+                assert call_args[1] == HWND_TOPMOST
+                # Flags must include SWP_SHOWWINDOW (0x0040) and SWP_NOACTIVATE (0x0010)
+                flags = call_args[6]
+                assert (flags & 0x0040) != 0, "SWP_SHOWWINDOW missing"
+                assert (flags & 0x0010) != 0, "SWP_NOACTIVATE missing"
+
+            # When unlocked, WM_SHOWWINDOW falls through to DefWindowProcW
+            set_overlay_locked(False)
+            with patch("input_locker.overlay.win32_overlay._user32.DefWindowProcW") as mock_def_proc:
+                mock_def_proc.return_value = 0
+                _global_overlay_wndproc(9999, WM_SHOWWINDOW, 0, 0)
+                mock_def_proc.assert_called_once_with(9999, WM_SHOWWINDOW, 0, 0)
+        finally:
+            set_overlay_locked(True)
+
+    def test_win32_overlay_edge_gesture_property_store(self):
+        """Verifies disable_edge_gestures sets PKEY_EdgeGesture_DisableTouchWhenFullscreen on HWND."""
+        user32 = ctypes.windll.user32
+        hwnd = user32.CreateWindowExW(0, "STATIC", "EdgeTestWindow", 0, 0, 0, 100, 100, 0, 0, 0, 0)
+        assert hwnd != 0, "Failed to create dummy test window"
+        try:
+            ok = disable_edge_gestures(hwnd)
+            assert ok is True, "disable_edge_gestures should return True for valid HWND"
+        finally:
+            user32.DestroyWindow(hwnd)
 
     def test_win32_overlay_show_hide_lifecycle(self):
         """Verifies overlay transitions between hidden and visible states."""
@@ -200,6 +308,32 @@ class TestWin32Overlay:
             hide_ok = overlay.hide()
             assert hide_ok is True
             assert overlay.is_visible() is False
+
+    def test_win32_overlay_hide_invokes_unregister_raw_touch(self):
+        """Regression test: Win32Overlay.hide() must call unregister_raw_touch().
+
+        Verifies that hiding the Win32 overlay window automatically releases
+        the raw touch / precision touchpad HID sink claim so gestures resume.
+        """
+        with patch("input_locker.overlay.win32_overlay.unregister_raw_touch") as mock_unreg:
+            with Win32Overlay(alpha=120) as overlay:
+                overlay.show()
+                mock_unreg.reset_mock()
+                assert overlay.hide() is True
+                assert overlay.is_visible() is False
+                assert mock_unreg.called, (
+                    "unregister_raw_touch() was NOT called when Win32Overlay.hide() executed!"
+                )
+
+    def test_win32_overlay_show_re_registers_raw_touch(self):
+        """Regression test: Win32Overlay.show() must re-register raw touch sink."""
+        with Win32Overlay(alpha=120) as overlay:
+            overlay.hide()
+            with patch("input_locker.overlay.win32_overlay.register_raw_touch") as mock_reg:
+                assert overlay.show() is True
+                assert mock_reg.called, (
+                    "register_raw_touch() was NOT called when Win32Overlay.show() executed!"
+                )
 
     def test_win32_overlay_spans_virtual_desktop(self):
         """Verifies overlay covers entire multi-monitor virtual desktop bounding box."""
@@ -305,6 +439,21 @@ class TestPyQtOverlay:
                 mock_tablet_ev = MagicMock()
                 w.tabletEvent(mock_tablet_ev)
                 mock_tablet_ev.accept.assert_called_once()
+
+    def test_pyqt_overlay_retains_toolwindow(self):
+        """Verifies PyQt overlay retains WS_EX_TOOLWINDOW for universal virtual desktop pinning."""
+        with PyQtOverlay() as overlay:
+            overlay.prewarm()
+            overlay.show()
+            time.sleep(0.05)
+            GWL_EXSTYLE = -20
+            WS_EX_TOOLWINDOW_FLAG = 0x00000080
+            user32 = ctypes.windll.user32
+            for w in overlay._widgets:
+                hwnd = int(w.winId())
+                ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                assert (ex_style & WS_EX_TOOLWINDOW_FLAG) != 0, "WS_EX_TOOLWINDOW must be retained on PyQt overlay"
+            overlay.hide()
 
     def test_pyqt_overlay_with_wallpaper_renders_lock_badge(self, tmp_path):
         """Verifies lock symbol badge is rendered on top even when a wallpaper is configured."""
@@ -423,6 +572,17 @@ class TestOverlayManager:
             assert mgr.is_locked() is False
             assert mgr.is_overlay_visible() is False
             assert mgr.is_cursor_confined() is False
+
+    def test_overlay_manager_hide_overlay_unregisters_raw_touch(self):
+        """Regression test: OverlayManager.hide_overlay() must call unregister_raw_touch()."""
+        with patch("input_locker.overlay.win32_overlay.unregister_raw_touch") as mock_unreg:
+            with OverlayManager(backend="win32") as mgr:
+                mgr.show_overlay()
+                mock_unreg.reset_mock()
+                assert mgr.hide_overlay() is True
+                assert mock_unreg.called, (
+                    "unregister_raw_touch() was NOT called when OverlayManager.hide_overlay() executed!"
+                )
 
     @pytest.mark.skipif(not PYQT6_AVAILABLE, reason="PyQt6 not installed")
     def test_overlay_manager_pyqt_backend(self):
@@ -546,4 +706,52 @@ class TestRawTouchRegistration:
             assert result is True, "register_raw_touch should succeed with a valid HWND"
             # Clean up
             unregister_raw_touch()
+
+    def test_ridev_capturemouse_flag_defined(self):
+        """RIDEV_CAPTUREMOUSE must equal 0x00000200."""
+        from input_locker.overlay.win32_overlay import RIDEV_CAPTUREMOUSE
+        assert RIDEV_CAPTUREMOUSE == 0x00000200
+
+
+# ===========================================================================
+# 7. TouchpadGuard Unit Tests
+# ===========================================================================
+
+class TestTouchpadGuard:
+    """Tests for dynamic Precision Touchpad hardware and gesture suppression."""
+
+    def test_touchpad_guard_cut_and_restore_cycle(self):
+        """Verifies TouchpadGuard cuts precision touchpad and cleanly restores."""
+        from input_locker.overlay.touchpad_guard import TouchpadGuard
+        # Ensure clean baseline
+        if TouchpadGuard.is_cut():
+            TouchpadGuard.restore_touchpad()
+        assert TouchpadGuard.is_cut() is False
+
+        # Cut touchpad
+        ok = TouchpadGuard.cut_touchpad()
+        assert ok is True
+        assert TouchpadGuard.is_cut() is True
+
+        # Restore touchpad
+        restored = TouchpadGuard.restore_touchpad()
+        assert restored is True
+        assert TouchpadGuard.is_cut() is False
+
+    def test_overlay_manager_does_not_own_touchpad_guard(self):
+        """TouchpadGuard is owned by LockerController, not OverlayManager.
+
+        OverlayManager.lock/unlock must leave PTP state untouched so there is a
+        single cut/restore owner and no double-toggle races.
+        """
+        from input_locker.overlay.touchpad_guard import TouchpadGuard
+        # Ensure clean baseline
+        if TouchpadGuard.is_cut():
+            TouchpadGuard.restore_touchpad()
+        assert TouchpadGuard.is_cut() is False
+        with OverlayManager(backend="win32") as mgr:
+            mgr.lock()
+            assert TouchpadGuard.is_cut() is False
+            mgr.unlock()
+            assert TouchpadGuard.is_cut() is False
 

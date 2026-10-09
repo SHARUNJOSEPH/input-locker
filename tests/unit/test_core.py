@@ -392,6 +392,62 @@ class TestLockerControllerLifecycle:
         ]
         assert call_order == expected_order
 
+    def test_controller_unlock_invokes_unregister_raw_touch(self) -> None:
+        """Regression test: controller.unlock() must call unregister_raw_touch().
+
+        Verifies that when unlocking with the default Win32 backend,
+        unregister_raw_touch() is invoked so that Windows 11 precision touchpad
+        multi-finger gestures (Task View, virtual desktops) and touchscreen
+        taps/drags are restored to normal operation for the unlocked session.
+        """
+        from input_locker.overlay.overlay_manager import OverlayManager
+        mock_hook = MagicMock()
+        mock_inner_overlay = MagicMock()
+        sm = StateMachine(initial_state=LockerState.LOCKED)
+        overlay_mgr = OverlayManager(backend="win32", auto_prewarm=False)
+        overlay_mgr.overlay = mock_inner_overlay
+
+        with patch("input_locker.overlay.overlay_manager.unregister_raw_touch") as mock_unreg_mgr, \
+             patch("input_locker.overlay.win32_overlay.unregister_raw_touch") as mock_unreg_win32:
+            controller = LockerController(
+                hook_manager=mock_hook,
+                overlay_manager=overlay_mgr,
+                state_machine=sm,
+                auto_prewarm=False,
+                auto_register_signals=False,
+            )
+            assert controller.unlock() is True
+            assert controller.is_locked() is False
+            assert controller.state == LockerState.UNLOCKED
+            assert mock_unreg_mgr.called or mock_unreg_win32.called, (
+                "unregister_raw_touch() was NOT invoked during controller.unlock()!"
+            )
+
+    def test_controller_owns_touchpad_guard_on_lock_unlock(self) -> None:
+        """LockerController (not OverlayManager) cuts/restores TouchpadGuard."""
+        from input_locker.overlay.touchpad_guard import TouchpadGuard
+
+        mock_hook = MagicMock()
+        mock_overlay = MagicMock()
+        if TouchpadGuard.is_cut():
+            TouchpadGuard.restore_touchpad()
+
+        controller = LockerController(
+            hook_manager=mock_hook,
+            overlay_manager=mock_overlay,
+            auto_prewarm=False,
+            auto_register_signals=False,
+        )
+        with patch.object(TouchpadGuard, "cut_touchpad", wraps=TouchpadGuard.cut_touchpad) as mock_cut, \
+             patch.object(TouchpadGuard, "restore_touchpad", wraps=TouchpadGuard.restore_touchpad) as mock_restore:
+            assert controller.lock() is True
+            assert mock_cut.called, "LockerController.lock() must call TouchpadGuard.cut_touchpad()"
+            assert TouchpadGuard.is_cut() is True
+
+            assert controller.unlock() is True
+            assert mock_restore.called, "LockerController.unlock() must call TouchpadGuard.restore_touchpad()"
+            assert TouchpadGuard.is_cut() is False
+
     def test_lock_transition_latency_under_budget(self) -> None:
         mock_hook = MagicMock()
         mock_overlay = MagicMock()
@@ -542,6 +598,78 @@ class TestLockerControllerLifecycle:
 
         assert controller.is_locked() is False
         assert controller.state == LockerState.UNLOCKED
+
+    def test_watchdog_dismisses_task_view_windows(self) -> None:
+        """Verifies the watchdog detects MultitaskingViewFrame / XamlExplorerHostIslandWindow
+        and immediately dispatches WM_CLOSE (0x0010) and VK_ESCAPE (0x1B)."""
+        mock_overlay = MagicMock()
+        controller = LockerController(
+            overlay_manager=mock_overlay,
+            auto_prewarm=False,
+            auto_register_signals=False,
+        )
+
+        def fake_get_class_name(hwnd, buf, size):
+            buf.value = "MultitaskingViewFrame"
+            return len("MultitaskingViewFrame")
+
+        def fake_get_window_text(hwnd, buf, size):
+            buf.value = "Task View"
+            return len("Task View")
+
+        import ctypes
+        with patch.object(ctypes.windll.user32, "GetForegroundWindow", return_value=9999), \
+             patch.object(ctypes.windll.user32, "GetClassNameW", side_effect=fake_get_class_name), \
+             patch.object(ctypes.windll.user32, "GetWindowTextW", side_effect=fake_get_window_text), \
+             patch.object(ctypes.windll.user32, "PostMessageW") as mock_post, \
+             patch.object(ctypes.windll.user32, "keybd_event") as mock_keybd, \
+             patch.object(ctypes.windll.user32, "FindWindowW", return_value=0):
+
+            controller.state_machine._state = LockerState.LOCKED
+            controller._start_watchdog()
+            time.sleep(0.15)
+            controller._watchdog_stop_event.set()
+
+            # Verify WM_CLOSE (0x0010) was posted to Task View window
+            mock_post.assert_any_call(9999, 0x0010, 0, 0)
+            # Verify VK_ESCAPE (0x1B) keybd_event was sent
+            escape_calls = [
+                c for c in mock_keybd.call_args_list if c[0][0] == 0x1B
+            ]
+            assert len(escape_calls) >= 2, "Expected VK_ESCAPE down and up events"
+
+    def test_watchdog_dismisses_background_multitasking_frame(self) -> None:
+        """Verifies watchdog checks FindWindowW for MultitaskingViewFrame and dismisses it."""
+        mock_overlay = MagicMock()
+        controller = LockerController(
+            overlay_manager=mock_overlay,
+            auto_prewarm=False,
+            auto_register_signals=False,
+        )
+
+        import ctypes
+        def fake_find_window(cls_name, title_name):
+            if cls_name == "MultitaskingViewFrame":
+                return 8888
+            return 0
+
+        with patch.object(ctypes.windll.user32, "GetForegroundWindow", return_value=1111), \
+             patch.object(ctypes.windll.user32, "GetClassNameW", return_value=0), \
+             patch.object(ctypes.windll.user32, "GetWindowTextW", return_value=0), \
+             patch.object(ctypes.windll.user32, "PostMessageW") as mock_post, \
+             patch.object(ctypes.windll.user32, "keybd_event") as mock_keybd, \
+             patch.object(ctypes.windll.user32, "FindWindowW", side_effect=fake_find_window):
+
+            controller.state_machine._state = LockerState.LOCKED
+            controller._start_watchdog()
+            time.sleep(0.15)
+            controller._watchdog_stop_event.set()
+
+            mock_post.assert_any_call(8888, 0x0010, 0, 0)
+            escape_calls = [
+                c for c in mock_keybd.call_args_list if c[0][0] == 0x1B
+            ]
+            assert len(escape_calls) >= 2
 
 
 

@@ -65,8 +65,25 @@ WM_PAINT = 0x000F
 WM_CLOSE = 0x0010
 WM_QUIT = 0x0012
 WM_ERASEBKGND = 0x0014
+WM_SHOWWINDOW = 0x0018
+WM_MOUSEACTIVATE = 0x0021
+WM_WINDOWPOSCHANGING = 0x0046
 WM_NCHITTEST = 0x0084
+WM_SYSCOMMAND = 0x0112
+WM_POINTERACTIVATE = 0x024B
+WM_TOUCHHITTESTING = 0x024D
+
+# Hit Testing and Activation Result Codes
 HTTRANSPARENT = -1
+HTCLIENT = 1
+MA_NOACTIVATEANDEAT = 3
+PA_NOACTIVATE = 3
+
+# SysCommand Codes
+SC_MINIMIZE = 0xF020
+
+# Touch Window Flags
+TWF_WANTPALM = 0x00000002
 
 LRESULT = ctypes.c_int64
 WPARAM = wintypes.WPARAM
@@ -78,6 +95,176 @@ WNDPROC = ctypes.WINFUNCTYPE(LRESULT, HWND, UINT, WPARAM, LPARAM)
 _user32 = ctypes.windll.user32
 _kernel32 = ctypes.windll.kernel32
 _gdi32 = ctypes.windll.gdi32
+
+
+class WINDOWPOS(ctypes.Structure):
+    """Win32 WINDOWPOS structure for WM_WINDOWPOSCHANGING / WM_WINDOWPOSCHANGED."""
+    _fields_ = [
+        ("hwnd",            wintypes.HWND),
+        ("hwndInsertAfter", wintypes.HWND),
+        ("x",               ctypes.c_int),
+        ("y",               ctypes.c_int),
+        ("cx",              ctypes.c_int),
+        ("cy",              ctypes.c_int),
+        ("flags",           wintypes.UINT),
+    ]
+
+
+class GUID(ctypes.Structure):
+    """Win32 GUID structure."""
+    _fields_ = [
+        ("Data1", wintypes.DWORD),
+        ("Data2", wintypes.WORD),
+        ("Data3", wintypes.WORD),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
+
+
+class PROPERTYKEY(ctypes.Structure):
+    """Win32 PROPERTYKEY structure."""
+    _fields_ = [
+        ("fmtid", GUID),
+        ("pid",   wintypes.DWORD),
+    ]
+
+
+class PROPVARIANT(ctypes.Structure):
+    """Win32 PROPVARIANT structure for setting window properties."""
+    _fields_ = [
+        ("vt",         wintypes.WORD),
+        ("wReserved1", wintypes.WORD),
+        ("wReserved2", wintypes.WORD),
+        ("wReserved3", wintypes.WORD),
+        ("boolVal",    ctypes.c_short),
+        ("padding",    ctypes.c_byte * 14),
+    ]
+
+
+# PKEY_EdgeGesture_DisableTouchWhenFullscreen: {32CE38B2-2C9A-41B1-9BC5-B3784394AA44}, PID 2
+PKEY_EdgeGesture_DisableTouchWhenFullscreen = PROPERTYKEY(
+    GUID(
+        0x32CE38B2,
+        0x2C9A,
+        0x41B1,
+        (ctypes.c_ubyte * 8)(0x9B, 0xC5, 0xB3, 0x78, 0x43, 0x94, 0xAA, 0x44),
+    ),
+    2,
+)
+
+# IID_IPropertyStore: {886D8EEB-8CF2-4446-8D02-CDBA1DBDCE99}
+IID_IPropertyStore = GUID(
+    0x886D8EEB,
+    0x8CF2,
+    0x4446,
+    (ctypes.c_ubyte * 8)(0x8D, 0x02, 0xCD, 0xBA, 0x1D, 0xBD, 0xCF, 0x99),
+)
+
+
+def disable_process_windows_ghosting() -> None:
+    """Disable Windows DWM unresponsive process ghosting.
+
+    Prevents Windows DWM from creating a ghost '(Not Responding)' window with
+    close controls when the process is busy or heavily loaded.
+    """
+    try:
+        if hasattr(_user32, "DisableProcessWindowsGhosting"):
+            _user32.DisableProcessWindowsGhosting()
+            logger.debug("DisableProcessWindowsGhosting invoked successfully")
+    except Exception as exc:
+        logger.debug("DisableProcessWindowsGhosting error: %s", exc)
+
+
+# Proactively disable ghosting on module load
+disable_process_windows_ghosting()
+
+
+def disable_edge_gestures(hwnd: int) -> bool:
+    """Disables Windows 11 edge gestures on the overlay window.
+
+    Sets PKEY_EdgeGesture_DisableTouchWhenFullscreen ({32CE38B2-2C9A-41B1-9BC5-B3784394AA44}, PID 2)
+    to VARIANT_TRUE on the overlay window HWND via SHGetPropertyStoreForWindow.
+
+    Args:
+        hwnd: Overlay window handle.
+
+    Returns:
+        True on success, False otherwise.
+    """
+    if not hwnd:
+        return False
+    try:
+        ole32 = ctypes.windll.ole32
+        shell32 = ctypes.windll.shell32
+        hr_init = ole32.CoInitialize(None)
+        try:
+            p_store = ctypes.c_void_p()
+            hr = shell32.SHGetPropertyStoreForWindow(
+                hwnd,
+                ctypes.byref(IID_IPropertyStore),
+                ctypes.byref(p_store),
+            )
+            if hr != 0 or not p_store.value:
+                logger.debug("SHGetPropertyStoreForWindow failed: hr=%s", hr)
+                return False
+
+            try:
+                vtable = ctypes.cast(
+                    p_store.value,
+                    ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)),
+                ).contents
+                set_value_proto = ctypes.WINFUNCTYPE(
+                    ctypes.c_long,
+                    ctypes.c_void_p,
+                    ctypes.POINTER(PROPERTYKEY),
+                    ctypes.POINTER(PROPVARIANT),
+                )
+                SetValue = set_value_proto(vtable[6])
+
+                # VT_BOOL = 11, VARIANT_TRUE = -1
+                var = PROPVARIANT(vt=11, boolVal=-1)
+                hr_set = SetValue(
+                    p_store.value,
+                    ctypes.byref(PKEY_EdgeGesture_DisableTouchWhenFullscreen),
+                    ctypes.byref(var),
+                )
+                if hr_set != 0:
+                    logger.debug("IPropertyStore::SetValue failed: hr=%s", hr_set)
+                    return False
+
+                try:
+                    commit_proto = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)
+                    Commit = commit_proto(vtable[7])
+                    Commit(p_store.value)
+                except Exception:
+                    pass
+
+                logger.debug("PKEY_EdgeGesture_DisableTouchWhenFullscreen set successfully on hwnd=%s", hwnd)
+                return True
+            finally:
+                release_proto = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)
+                Release = release_proto(vtable[2])
+                Release(p_store.value)
+        finally:
+            if hr_init in (0, 1):
+                ole32.CoUninitialize()
+    except Exception as exc:
+        logger.debug("disable_edge_gestures error: %s", exc)
+        return False
+
+
+# Module-level locked state tracker for anti-minimize and anti-hide protection
+_overlay_locked: bool = True
+
+
+def set_overlay_locked(locked: bool) -> None:
+    """Sets whether overlay anti-minimize and anti-hide protection is active."""
+    global _overlay_locked
+    _overlay_locked = bool(locked)
+
+
+def is_overlay_locked() -> bool:
+    """Returns whether overlay anti-minimize and anti-hide protection is active."""
+    return _overlay_locked
 
 # ---------------------------------------------------------------------------
 # Raw Input Device registration — gesture bypass suppression
@@ -91,11 +278,16 @@ _gdi32 = ctypes.windll.gdi32
 RIDEV_REMOVE        = 0x00000001   # unregister a previously registered device
 RIDEV_NOLEGACY      = 0x00000030   # suppress legacy WM_TOUCH / gesture pipeline
 RIDEV_INPUTSINK     = 0x00000100   # receive input even when not foreground
+RIDEV_CAPTUREMOUSE  = 0x00000200   # exclusively capture all mouse/touchpad pointer reports to target window
 RIDEV_EXINPUTSINK   = 0x00001000   # receive input from other processes even when not focused
 
+HID_USAGE_PAGE_GENERIC    = 0x01
+HID_USAGE_GENERIC_MOUSE   = 0x02
 HID_USAGE_PAGE_DIGITIZER  = 0x0D
 HID_USAGE_TOUCHSCREEN     = 0x04
 HID_USAGE_TOUCHPAD        = 0x05
+
+_registered_raw_hwnd: Optional[int] = None
 
 
 class RAWINPUTDEVICE(ctypes.Structure):
@@ -109,34 +301,59 @@ class RAWINPUTDEVICE(ctypes.Structure):
 
 
 def register_raw_touch(hwnd: int) -> bool:
-    """Claim raw HID touch/touchpad reports to suppress the Shell gesture pipeline.
+    """Claim raw HID touch/touchpad reports and capture mouse to suppress Shell gestures.
 
-    Registers the HID digitizer touchscreen (0x04) and touchpad (0x05) usages
-    with RIDEV_INPUTSINK. This redirects raw multi-touch and precision touchpad
-    reports directly to the overlay's input sink, bypassing DirectManipulation
-    and preventing shell multi-finger gestures while locked.
+    1. Registers HID mouse (1, 2) with RIDEV_NOLEGACY | RIDEV_CAPTUREMOUSE to exclusively
+       route all mouse/touchpad clicks and pointer movements to hwnd without legacy translation.
+    2. Registers HID touchscreen (0x0D, 0x04) and touchpad (0x0D, 0x05) with RIDEV_INPUTSINK.
+    3. Calls RegisterTouchpadCapableWindow and RegisterTouchpadCapableThread so multi-finger
+       touchpad contacts are routed to overlay as WM_POINTER instead of DWM Shell gestures.
 
     Args:
-        hwnd: Target HWND that will receive WM_INPUT messages. The window
-              does not need to be visible or foreground (RIDEV_INPUTSINK).
+        hwnd: Target HWND that will receive WM_INPUT and WM_POINTER messages.
 
     Returns:
-        True on success, False if the registration fails.
+        True on success, False if registration fails.
     """
+    global _registered_raw_hwnd
     if not hwnd:
         return False
 
     try:
-        flags = RIDEV_INPUTSINK
-        devices = (RAWINPUTDEVICE * 2)(
-            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHSCREEN, flags, hwnd),
-            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD,    flags, hwnd),
+        # 1. Register window and thread as touchpad capable
+        if hasattr(_user32, "RegisterTouchpadCapableWindow"):
+            try:
+                _user32.RegisterTouchpadCapableWindow(hwnd, True)
+            except Exception as exc:
+                logger.debug("RegisterTouchpadCapableWindow error: %s", exc)
+        if hasattr(_user32, "RegisterTouchpadCapableThread"):
+            try:
+                _user32.RegisterTouchpadCapableThread(_kernel32.GetCurrentThreadId(), True)
+            except Exception as exc:
+                logger.debug("RegisterTouchpadCapableThread error: %s", exc)
+
+        # 2. Register Raw Input Devices: Mouse capture + Digitizer touchscreen + touchpad
+        mouse_flags = RIDEV_NOLEGACY | RIDEV_CAPTUREMOUSE
+        digitizer_flags = RIDEV_INPUTSINK
+        devices = (RAWINPUTDEVICE * 3)(
+            RAWINPUTDEVICE(HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, mouse_flags, hwnd),
+            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHSCREEN, digitizer_flags, hwnd),
+            RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD,    digitizer_flags, hwnd),
         )
         ok = bool(_user32.RegisterRawInputDevices(
-            devices, 2, ctypes.sizeof(RAWINPUTDEVICE)
+            devices, 3, ctypes.sizeof(RAWINPUTDEVICE)
         ))
         if not ok:
-            logger.debug("RegisterRawInputDevices failed: error %s", _kernel32.GetLastError())
+            # Fallback to 2-device registration if mouse capture disallowed on older build
+            devs2 = (RAWINPUTDEVICE * 2)(
+                RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHSCREEN, digitizer_flags, hwnd),
+                RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD,    digitizer_flags, hwnd),
+            )
+            ok = bool(_user32.RegisterRawInputDevices(
+                devs2, 2, ctypes.sizeof(RAWINPUTDEVICE)
+            ))
+            logger.debug("RegisterRawInputDevices 3-device failed, 2-device fallback: %s", ok)
+        _registered_raw_hwnd = hwnd
         return ok
     except Exception as exc:
         logger.debug("register_raw_touch error: %s", exc)
@@ -144,24 +361,37 @@ def register_raw_touch(hwnd: int) -> bool:
 
 
 def unregister_raw_touch() -> bool:
-    """Release the raw HID touch/touchpad claim, restoring Shell gesture pipeline.
-
-    Must be called when unlocking so normal touchpad gestures are restored for
-    the user's regular Windows session.
-
-    Returns:
-        True on success.
-    """
+    """Release raw HID touch/touchpad/mouse claims and restore Shell gestures."""
+    global _registered_raw_hwnd
     try:
-        devices = (RAWINPUTDEVICE * 2)(
+        if _registered_raw_hwnd and hasattr(_user32, "RegisterTouchpadCapableWindow"):
+            try:
+                _user32.RegisterTouchpadCapableWindow(_registered_raw_hwnd, False)
+            except Exception:
+                pass
+        if hasattr(_user32, "RegisterTouchpadCapableThread"):
+            try:
+                _user32.RegisterTouchpadCapableThread(_kernel32.GetCurrentThreadId(), False)
+            except Exception:
+                pass
+        _registered_raw_hwnd = None
+
+        devices = (RAWINPUTDEVICE * 3)(
+            RAWINPUTDEVICE(HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, RIDEV_REMOVE, 0),
             RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHSCREEN, RIDEV_REMOVE, 0),
             RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD,    RIDEV_REMOVE, 0),
         )
         ok = bool(_user32.RegisterRawInputDevices(
-            devices, 2, ctypes.sizeof(RAWINPUTDEVICE)
+            devices, 3, ctypes.sizeof(RAWINPUTDEVICE)
         ))
         if not ok:
-            logger.debug("unregister_raw_touch failed: error %s", _kernel32.GetLastError())
+            devs2 = (RAWINPUTDEVICE * 2)(
+                RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHSCREEN, RIDEV_REMOVE, 0),
+                RAWINPUTDEVICE(HID_USAGE_PAGE_DIGITIZER, HID_USAGE_TOUCHPAD,    RIDEV_REMOVE, 0),
+            )
+            ok = bool(_user32.RegisterRawInputDevices(
+                devs2, 2, ctypes.sizeof(RAWINPUTDEVICE)
+            ))
         return ok
     except Exception as exc:
         logger.debug("unregister_raw_touch error: %s", exc)
@@ -269,12 +499,48 @@ def _global_overlay_wndproc(hwnd: int, msg: int, wparam: int, lparam: int) -> in
     if msg == WM_NCHITTEST:
         # Absorb hit-testing on the overlay (HTCLIENT = 1) so clicks and taps do NOT pass through
         # to background windows/media engines while locked.
-        return 1  # HTCLIENT
-    elif msg == 0x0021:  # WM_MOUSEACTIVATE
+        return HTCLIENT  # 1
+    elif msg == WM_MOUSEACTIVATE:  # 0x0021
         # Do not activate this window and discard the mouse click / tap (MA_NOACTIVATEANDEAT = 3)
-        return 3
+        return MA_NOACTIVATEANDEAT  # 3
+    elif msg == WM_TOUCHHITTESTING:  # 0x024D
+        # Win32 touch hit-testing: return HTCLIENT (1) so physical touchscreen touches hit
+        # this overlay deterministically rather than HTNOWHERE (0) falling through.
+        return HTCLIENT  # 1
+    elif msg == WM_POINTERACTIVATE:  # 0x024B
+        # Windows Pointer architecture: do not activate the overlay and consume the pointer event
+        return PA_NOACTIVATE  # 3
+    elif msg == WM_SYSCOMMAND:  # 0x0112
+        # Anti-minimize protection: block SC_MINIMIZE (0xF020) so 3-finger swipe down
+        # (Show Desktop) never minimizes the overlay or exposes underlying windows.
+        if (wparam & 0xFFF0) == SC_MINIMIZE:
+            return 0
+        return _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+    elif msg == WM_WINDOWPOSCHANGING:  # 0x0046
+        # Anti-hide protection: strip SWP_HIDEWINDOW (0x0080) and force HWND_TOPMOST (-1) while locked
+        if is_overlay_locked() and lparam:
+            try:
+                p_winpos = ctypes.cast(lparam, ctypes.POINTER(WINDOWPOS))
+                if p_winpos:
+                    p_winpos.contents.flags &= ~SWP_HIDEWINDOW
+                    p_winpos.contents.hwndInsertAfter = HWND_TOPMOST
+            except Exception as exc:
+                logger.debug("WM_WINDOWPOSCHANGING error: %s", exc)
+        return 0
+    elif msg == WM_SHOWWINDOW:  # 0x0018
+        # Anti-hide protection: if window is being hidden (wParam == 0) while locked,
+        # reject and immediately reassert topmost visibility.
+        if wparam == 0 and is_overlay_locked():
+            _user32.SetWindowPos(
+                hwnd,
+                HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE,
+            )
+            return 0
+        return _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
     elif msg == 0x00FF:  # WM_INPUT
-        # Raw input is claimed by RIDEV_NOLEGACY registration to suppress the Shell gesture
+        # Raw input is claimed by RIDEV_INPUTSINK registration to suppress the Shell gesture
         # pipeline (DirectManipulation in explorer.exe never sees finger data).
         # We must call DefWindowProcW to free the raw input buffer — we do NOT parse it.
         _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -305,9 +571,7 @@ def _global_overlay_wndproc(hwnd: int, msg: int, wparam: int, lparam: int) -> in
         0x0247,  # WM_POINTERUP
         0x0249,  # WM_POINTERENTER
         0x024A,  # WM_POINTERLEAVE
-        0x024B,  # WM_POINTERACTIVATE
         0x024C,  # WM_POINTERCAPTURECHANGED
-        0x024D,  # WM_TOUCHHITTESTING
         0x0252,  # WM_POINTERWHEEL
         0x0253,  # WM_POINTERHWHEEL
         # Mouse Messages & Emulated Touch Clicks/Drags
@@ -478,15 +742,15 @@ class Win32Overlay:
         # Register window with Windows touch architecture to receive physical multi-touch & gestures directly
         try:
             if hasattr(_user32, "RegisterTouchWindow"):
-                _user32.RegisterTouchWindow(hwnd, 0)
+                _user32.RegisterTouchWindow(hwnd, TWF_WANTPALM)
         except Exception as exc:
             logger.debug("Win32 RegisterTouchWindow error: %s", exc)
 
-        # Claim raw HID touch/touchpad reports with RIDEV_NOLEGACY so DirectManipulation
-        # inside explorer.exe cannot process multi-finger PTP gestures while locked.
-        # unregister_raw_touch() is called in close() to restore normal gesture behaviour.
-        register_raw_touch(hwnd)
-        logger.debug("Win32Overlay: raw touch claim registered for hwnd=%s", hwnd)
+        # Disable Windows 11 shell edge gestures (Widgets, Action Center, edge swipes)
+        disable_edge_gestures(hwnd)
+
+        # Note: register_raw_touch(hwnd) is called in show() when the overlay is locked,
+        # and unregister_raw_touch() is called in hide() / close() when unlocked.
 
         # Set transparency (alpha blending)
         _user32.SetLayeredWindowAttributes(hwnd, 0, self.alpha, LWA_ALPHA)
@@ -538,6 +802,7 @@ class Win32Overlay:
             bool: True if overlay was successfully displayed.
         """
         with self._state_lock:
+            set_overlay_locked(True)
             if not self._hwnd or not self._thread or not self._thread.is_alive():
                 self.prewarm()
 
@@ -558,6 +823,9 @@ class Win32Overlay:
             if success:
                 _user32.InvalidateRect(self._hwnd, None, True)
                 _user32.UpdateWindow(self._hwnd)
+                # Re-register raw HID touch/touchpad sink so multi-touch gestures are swallowed
+                register_raw_touch(self._hwnd)
+                logger.debug("Win32Overlay: raw touch claim registered for hwnd=%s", self._hwnd)
 
             self._is_visible = success
             logger.debug(f"Win32Overlay shown across virtual desktop ({vx}, {vy}, {vw}, {vh}): {success}")
@@ -572,6 +840,9 @@ class Win32Overlay:
             bool: True if overlay was successfully hidden.
         """
         with self._state_lock:
+            set_overlay_locked(False)
+            # Release raw HID touch/touchpad claim so normal Shell gestures are restored
+            unregister_raw_touch()
             if not self._hwnd:
                 self._is_visible = False
                 return True
@@ -623,6 +894,7 @@ class Win32Overlay:
     def close(self) -> None:
         """Closes and destroys the overlay window and terminates the worker thread."""
         with self._state_lock:
+            set_overlay_locked(False)
             self._stop_event.set()
             # Release raw HID touch/touchpad claim so normal Shell gestures are restored
             unregister_raw_touch()

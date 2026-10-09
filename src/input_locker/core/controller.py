@@ -21,6 +21,7 @@ from input_locker.core.state_machine import (
 )
 from input_locker.hooks.hook_manager import HookManager
 from input_locker.overlay.overlay_manager import OverlayManager
+from input_locker.overlay.touchpad_guard import TouchpadGuard
 
 import queue
 
@@ -334,6 +335,15 @@ class LockerController:
                 self.hook_manager.set_swallow(True)
                 _set_disable_lock_workstation(True)
 
+                # Step 2b: Cut Precision Touchpad + multi-finger Shell gestures at source.
+                # LockerController historically called show_overlay()/confine_cursor()
+                # directly and skipped OverlayManager.lock(), so TouchpadGuard never ran
+                # and 3/4-finger trackpad gestures kept working while "locked".
+                try:
+                    TouchpadGuard.cut_touchpad()
+                except Exception as exc:
+                    logger.debug("TouchpadGuard cut during lock failed: %s", exc)
+
                 # Step 3: Confine cursor to (0, 0) and hide cursor shape
                 self.overlay_manager.confine_cursor()
                 self._start_watchdog()
@@ -380,15 +390,63 @@ class LockerController:
         self._watchdog_stop_event.clear()
 
         def _watchdog_loop():
+            user32 = None
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+            except Exception:
+                pass
+
             while not self._watchdog_stop_event.is_set() and self.is_locked():
                 try:
-                    if self._watchdog_stop_event.wait(timeout=0.3):
+                    if self._watchdog_stop_event.wait(timeout=0.04):
                         break
                     if not self.is_locked() or self._watchdog_stop_event.is_set():
                         break
                     # If password entry dialog is active, let it manage confinement
                     if getattr(self.hook_manager.event_filter, "password_mode", False):
                         continue
+
+                    # Active Task View interceptor (narrow class list only).
+                    # Do NOT match ApplicationFrameWindow / empty-title CoreWindow —
+                    # those classes are shared by UWP staging apps and would steal
+                    # focus or dismiss password UI. Rely on TouchpadGuard + raw-touch
+                    # registration to stop most PTP gestures at the source.
+                    if user32:
+                        try:
+                            _TASK_VIEW_CLASSES = (
+                                "XamlExplorerHostIslandWindow",
+                                "MultitaskingViewFrame",
+                            )
+                            fg = user32.GetForegroundWindow()
+                            if fg:
+                                cls_buf = ctypes.create_unicode_buffer(256)
+                                user32.GetClassNameW(fg, cls_buf, 256)
+                                cls_name = cls_buf.value
+                                if cls_name in _TASK_VIEW_CLASSES:
+                                    user32.ShowWindow(fg, 0)  # SW_HIDE
+                                    user32.PostMessageW(fg, 0x0010, 0, 0)  # WM_CLOSE
+                                    user32.keybd_event(0x1B, 0, 0, 0)
+                                    user32.keybd_event(0x1B, 0, 0x0002, 0)
+                                    if hasattr(self.overlay_manager, "overlay") and hasattr(
+                                        self.overlay_manager.overlay, "show"
+                                    ):
+                                        self.overlay_manager.overlay.show()
+
+                            for target_cls in _TASK_VIEW_CLASSES:
+                                hw = user32.FindWindowW(target_cls, None)
+                                if hw:
+                                    user32.ShowWindow(hw, 0)
+                                    user32.PostMessageW(hw, 0x0010, 0, 0)
+                                    user32.keybd_event(0x1B, 0, 0, 0)
+                                    user32.keybd_event(0x1B, 0, 0x0002, 0)
+                                    if hasattr(self.overlay_manager, "overlay") and hasattr(
+                                        self.overlay_manager.overlay, "show"
+                                    ):
+                                        self.overlay_manager.overlay.show()
+                        except Exception as exc:
+                            logger.debug("Task View dismiss check error: %s", exc)
+
                     # Re-enforce cursor confinement to (0, 0)
                     if not self.overlay_manager.cursor_guard.is_confined():
                         self.overlay_manager.confine_cursor()
@@ -483,6 +541,10 @@ class LockerController:
                 self._watchdog_stop_event.set()
                 self.state_machine.transition_to(LockerState.UNLOCKING)
                 _set_disable_lock_workstation(False)
+                try:
+                    TouchpadGuard.restore_touchpad()
+                except Exception as exc:
+                    logger.debug("TouchpadGuard restore during unlock failed: %s", exc)
                 self.overlay_manager.hide_overlay()
                 self.overlay_manager.release_cursor()
                 self.hook_manager.set_swallow(False)
@@ -532,6 +594,10 @@ class LockerController:
 
     def _safe_rollback(self) -> None:
         """Emergency rollback ensuring user input is restored on sequence failure."""
+        try:
+            TouchpadGuard.restore_touchpad()
+        except Exception:
+            pass
         try:
             self.overlay_manager.hide_overlay()
         except Exception:

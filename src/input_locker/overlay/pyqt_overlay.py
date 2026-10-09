@@ -213,6 +213,51 @@ class _ScreenOverlayWidget(QWidget):
     def tabletEvent(self, event) -> None:  # type: ignore[override]
         event.accept()
 
+    def nativeEvent(self, event_type, message):  # type: ignore[override]
+        """Win32 native window message filter for zero-activation touch & gesture absorption."""
+        try:
+            if event_type in (b"windows_generic_MSG", "windows_generic_MSG"):
+                msg = wintypes.MSG.from_address(int(message))
+                m = msg.message
+                # WM_NCHITTEST (0x0084) & WM_TOUCHHITTESTING (0x024D) -> HTCLIENT (1)
+                if m in (0x0084, 0x024D):
+                    return True, 1
+                # WM_MOUSEACTIVATE (0x0021) -> MA_NOACTIVATEANDEAT (3)
+                if m == 0x0021:
+                    return True, 3
+                # WM_POINTERACTIVATE (0x024B) -> PA_NOACTIVATE (3)
+                if m == 0x024B:
+                    return True, 3
+                # WM_INPUT (0x00FF) -> DefWindowProcW to drain buffer
+                if m == 0x00FF:
+                    _user32.DefWindowProcW(msg.hwnd, m, msg.wParam, msg.lParam)
+                    return True, 0
+                # WM_TOUCH (0x0240) -> CloseTouchInputHandle to prevent kernel leaks
+                if m == 0x0240:
+                    if hasattr(_user32, "CloseTouchInputHandle") and msg.lParam:
+                        try:
+                            _user32.CloseTouchInputHandle(msg.lParam)
+                        except Exception:
+                            pass
+                    return True, 0
+                # WM_GESTURE (0x0119) -> CloseGestureInfoHandle to prevent kernel leaks
+                if m == 0x0119:
+                    if hasattr(_user32, "CloseGestureInfoHandle") and msg.lParam:
+                        try:
+                            _user32.CloseGestureInfoHandle(msg.lParam)
+                        except Exception:
+                            pass
+                    return True, 0
+                # All WM_POINTER messages (0x0241..0x0253) -> Absorb completely
+                if 0x0241 <= m <= 0x0253:
+                    return True, 0
+                # WM_SYSCOMMAND (0x0112) SC_MINIMIZE -> Swallow minimize attempts
+                if m == 0x0112 and (msg.wParam & 0xFFF0) == 0xF020:
+                    return True, 0
+        except Exception:
+            pass
+        return False, 0
+
 
 _user32 = ctypes.windll.user32
 _user32.SetWindowPos.restype = wintypes.BOOL
@@ -276,15 +321,8 @@ class _OverlayBridge(QObject):
             w.show()
             hwnd = int(w.winId())
 
-            # Strip WS_EX_TOOLWINDOW: this flag tells the Windows Pointer compositor to
-            # deprioritise the window for touch hit-testing.  Removing it means the overlay
-            # is treated as a regular topmost window and wins the pointer hit-test.
-            try:
-                ex_style = _user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-                if ex_style and (ex_style & WS_EX_TOOLWINDOW_FLAG):
-                    _user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style & ~WS_EX_TOOLWINDOW_FLAG)
-            except Exception as exc:
-                logger.debug("PyQt strip WS_EX_TOOLWINDOW error: %s", exc)
+            # Retain WS_EX_TOOLWINDOW: in Windows 10/11, WS_EX_TOOLWINDOW ensures the
+            # overlay renders across all virtual desktops (blocks 4-finger swipe bypass).
 
             _user32.SetWindowPos(
                 hwnd, HWND_TOPMOST,
@@ -293,9 +331,21 @@ class _OverlayBridge(QObject):
             )
             try:
                 if hasattr(_user32, "RegisterTouchWindow"):
-                    _user32.RegisterTouchWindow(hwnd, 0)
+                    _user32.RegisterTouchWindow(hwnd, 0x00000002)  # TWF_WANTPALM
             except Exception as exc:
                 logger.debug("PyQt RegisterTouchWindow error: %s", exc)
+
+            try:
+                from input_locker.overlay.win32_overlay import disable_edge_gestures
+                disable_edge_gestures(hwnd)
+            except Exception as exc:
+                logger.debug("PyQt disable_edge_gestures error: %s", exc)
+
+            try:
+                if hasattr(_user32, "RegisterTouchpadCapableWindow"):
+                    _user32.RegisterTouchpadCapableWindow(hwnd, True)
+            except Exception as exc:
+                logger.debug("PyQt RegisterTouchpadCapableWindow error: %s", exc)
 
             _raw_hwnd_list.append(hwnd)
 
@@ -321,6 +371,11 @@ class _OverlayBridge(QObject):
 
         for w in self.widgets:
             hwnd = int(w.winId())
+            try:
+                if hasattr(_user32, "RegisterTouchpadCapableWindow"):
+                    _user32.RegisterTouchpadCapableWindow(hwnd, False)
+            except Exception:
+                pass
             _user32.SetWindowPos(
                 hwnd, 0,
                 0, 0, 0, 0,
