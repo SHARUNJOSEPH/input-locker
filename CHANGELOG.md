@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.10] - 2026-10-09
+
+### Added
+- **Install-time elevated touchpad helper**: Inno Setup registers on-demand scheduled task `\InputLocker\InputLockerTouchpadHelper` (RunLevel Highest). After install, Input Locker starts the helper via `schtasks /Run` with **no UAC on launch**. Uninstall removes the task. Helpers live under `installer/helpers/` (including a one-shot `register_touchpad_task_once.bat` / `deploy_no_uac.ps1` for existing installs).
+
+### Fixed
+- **Lock overlay latency**: Overlay now shows before Precision Touchpad PnP device disable. Registry gesture cut stays synchronous; device disable runs asynchronously. Startup warms the touchpad device ID cache. Removes the ~9s blank gap before the lock screen appeared.
+- **Portable / source fallback**: If the scheduled task is missing, helper start still falls back to a one-shot RunAs (UAC once per session) instead of failing silently.
+
 ## [0.2.9] - 2026-10-09
 
 ### Added

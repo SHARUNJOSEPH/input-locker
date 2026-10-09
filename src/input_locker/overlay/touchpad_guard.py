@@ -8,9 +8,11 @@ locker is active, and restores them on unlock. Two layers are used:
 2. Device-level disable of the touchpad HID device through PnP. This is what actually
    stops 3/4-finger swipes. It needs administrator rights.
 
-To avoid a UAC prompt (and a multi-second gesture gap) on every lock, a long-lived
-elevated helper is started once at application launch. Lock/unlock then send
-commands to that helper over a small command file, so the device cut is near-instant.
+The installer registers an on-demand, highest-privilege scheduled task for the
+touchpad helper. At launch the app starts that task with ``schtasks /Run`` — no
+UAC prompt. Lock/unlock then send commands over a small command file under
+``%PROGRAMDATA%\\InputLocker``. Portable / non-installed runs fall back to a
+one-shot ``RunAs`` launch (UAC once per session).
 
 ``TouchpadGuard.device_control_enabled`` is OFF by default so tests never trigger
 UAC. The application entrypoint turns it on and starts the helper.
@@ -70,9 +72,21 @@ _CREATE_NO_WINDOW = 0x08000000
 _UAC_TIMEOUT_S = 180
 _HELPER_ACK_TIMEOUT_S = 15.0
 _HELPER_POLL_S = 0.05
+_SCHEDULED_TASK_NAME = r"\InputLocker\InputLockerTouchpadHelper"
 
 
 def _state_dir() -> Path:
+    """Shared IPC directory for the elevated helper and the user-mode app.
+
+    Prefer ``%PROGRAMDATA%\\InputLocker`` when it exists (created by the
+    installer with ACLs that let Authenticated Users write cmd/ack files).
+    Fall back to ``%LOCALAPPDATA%\\InputLocker`` for portable / source runs.
+    """
+    prog = os.environ.get("PROGRAMDATA")
+    if prog:
+        shared = Path(prog) / "InputLocker"
+        if shared.is_dir():
+            return shared
     base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
     return Path(base) / "InputLocker"
 
@@ -312,8 +326,104 @@ class TouchpadGuard:
         return cls._is_cut
 
     @classmethod
+    def _scheduled_task_exists(cls) -> bool:
+        """True if the install-time elevated scheduled task is registered."""
+        try:
+            result = subprocess.run(
+                ["schtasks", "/Query", "/TN", _SCHEDULED_TASK_NAME],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=_CREATE_NO_WINDOW,
+                check=False,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    @classmethod
+    def _start_helper_via_scheduled_task(cls) -> bool:
+        """Start the helper through the install-time task (no UAC)."""
+        try:
+            result = subprocess.run(
+                ["schtasks", "/Run", "/TN", _SCHEDULED_TASK_NAME],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                creationflags=_CREATE_NO_WINDOW,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.debug(
+                    "schtasks /Run failed (rc=%s): %s",
+                    result.returncode,
+                    (result.stderr or result.stdout or "").strip(),
+                )
+                return False
+            deadline = time.time() + _HELPER_ACK_TIMEOUT_S
+            while time.time() < deadline:
+                if _helper_alive():
+                    cls._helper_started = True
+                    logger.info(
+                        "Touchpad elevated helper started via scheduled task (no UAC)"
+                    )
+                    return True
+                time.sleep(_HELPER_POLL_S)
+            logger.warning("Scheduled-task touchpad helper did not start in time")
+            return False
+        except Exception as exc:
+            logger.debug("Scheduled-task helper start error: %s", exc)
+            return False
+
+    @classmethod
+    def _start_helper_via_runas(cls) -> bool:
+        """Fallback: one-shot elevated PowerShell (shows UAC). For portable runs."""
+        try:
+            script = _helper_script(
+                str(_cmd_file()),
+                str(_ack_file()),
+                str(_helper_pid_file()),
+            )
+            encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+            outer = (
+                "try { Start-Process powershell -Verb RunAs -WindowStyle Hidden "
+                "-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','"
+                + encoded
+                + "'; exit 0 } catch { exit 1 }"
+            )
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", outer],
+                capture_output=True,
+                text=True,
+                timeout=_UAC_TIMEOUT_S,
+                creationflags=_CREATE_NO_WINDOW,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.warning("Failed to launch elevated touchpad helper (UAC declined?)")
+                return False
+
+            deadline = time.time() + _HELPER_ACK_TIMEOUT_S
+            while time.time() < deadline:
+                if _helper_alive():
+                    cls._helper_started = True
+                    logger.info(
+                        "Touchpad elevated helper started via RunAs (UAC once this session)"
+                    )
+                    return True
+                time.sleep(_HELPER_POLL_S)
+            logger.warning("Elevated touchpad helper did not start in time")
+            return False
+        except Exception as exc:
+            logger.warning("RunAs helper start error: %s", exc)
+            return False
+
+    @classmethod
     def ensure_elevated_helper(cls) -> bool:
-        """Start the once-per-session elevated helper (one UAC prompt).
+        """Start the once-per-session elevated helper without a UAC prompt when possible.
+
+        Prefer the install-time scheduled task (``schtasks /Run``). Fall back to a
+        one-shot ``RunAs`` launch only when the task is missing (portable / source).
 
         Call from the application entrypoint after enabling device control.
         Returns True if the helper is running (already was, or just started).
@@ -335,41 +445,14 @@ class TouchpadGuard:
                 except Exception:
                     pass
 
-            script = _helper_script(
-                str(_cmd_file()),
-                str(_ack_file()),
-                str(_helper_pid_file()),
-            )
-            encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-            # Launch elevated WITHOUT -Wait so this process continues immediately.
-            outer = (
-                "try { Start-Process powershell -Verb RunAs -WindowStyle Hidden "
-                "-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','"
-                + encoded
-                + "'; exit 0 } catch { exit 1 }"
-            )
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-Command", outer],
-                capture_output=True,
-                text=True,
-                timeout=_UAC_TIMEOUT_S,
-                creationflags=_CREATE_NO_WINDOW,
-                check=False,
-            )
-            if result.returncode != 0:
-                logger.warning("Failed to launch elevated touchpad helper (UAC declined?)")
-                return False
-
-            # Wait until the helper writes its PID file.
-            deadline = time.time() + _HELPER_ACK_TIMEOUT_S
-            while time.time() < deadline:
-                if _helper_alive():
-                    cls._helper_started = True
-                    logger.info("Touchpad elevated helper started (one UAC for this session)")
+            if cls._scheduled_task_exists():
+                if cls._start_helper_via_scheduled_task():
                     return True
-                time.sleep(_HELPER_POLL_S)
-            logger.warning("Elevated touchpad helper did not start in time")
-            return False
+                logger.warning(
+                    "Scheduled-task helper start failed; falling back to RunAs (UAC)"
+                )
+
+            return cls._start_helper_via_runas()
         except Exception as exc:
             logger.warning("ensure_elevated_helper error: %s", exc)
             return False

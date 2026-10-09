@@ -157,15 +157,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     # ── Touchpad device safety (elevated disable is opt-in) ───────────────
-    # Re-enable any touchpad left disabled by a crashed previous session, then
-    # start a once-per-session elevated helper (one UAC prompt). Lock/unlock
-    # then disable/enable the device through that helper with no further UAC.
-    # Device cut runs in the background after the overlay appears so lock feels
-    # instant; warm the PnP ID cache here so that background cut is also fast.
+    # Prefer the install-time scheduled task (schtasks /Run, no UAC). Portable
+    # / source runs fall back to a one-shot RunAs helper. Device cut runs in
+    # the background after the overlay appears so lock feels instant; warm the
+    # PnP ID cache here so that background cut is also fast.
     try:
         from input_locker.overlay.touchpad_guard import TouchpadGuard
         TouchpadGuard.device_control_enabled = True
-        # Start the helper first so crash-recovery re-enable uses it (no second UAC).
+        # Start the helper first so crash-recovery re-enable uses it.
         TouchpadGuard.ensure_elevated_helper()
         TouchpadGuard.recover_if_stale()
         TouchpadGuard.warm_device_cache()

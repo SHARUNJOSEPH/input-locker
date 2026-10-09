@@ -23,7 +23,7 @@
     <img src="https://img.shields.io/badge/🚀%20Roadmap-Releases%20%26%20Backlog-4F46E5?style=for-the-badge&logo=github&logoColor=white" alt="Roadmap & Releases" />
   </a>
   <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
-    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.9-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
+    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.10-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
   </a>
 </p>
 
@@ -62,8 +62,8 @@ A high-performance, zero-latency background utility engineered for Windows live 
 
 | Package | Format | Architecture | Download Link |
 | :--- | :---: | :---: | :--- |
-| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.9.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.9/InputLocker-Setup-v0.2.9.exe) |
-| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.9-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.9/InputLocker-v0.2.9-Windows-x64.zip) |
+| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.10.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.10/InputLocker-Setup-v0.2.10.exe) |
+| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.10-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.10/InputLocker-v0.2.10-Windows-x64.zip) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 
 ### ⚡ Command-Line Install (`winget`)
@@ -308,6 +308,7 @@ In live AV staging, video engines (Resolume, WATCHOUT) drop frames or lose Direc
     - Configure **Software SAS Generation** to regulate software invocation of SAS.
 
 ### 2. User Account Control (UAC) Elevation Prompt Behavior
+- **Install-time elevation only (touchpad helper)**: The Inno Setup installer (already elevated) registers an on-demand scheduled task `\InputLocker\InputLockerTouchpadHelper` that runs the Precision Touchpad helper with highest privileges. After install, Input Locker starts that helper with `schtasks /Run` — **no UAC prompt on normal launches**. Uninstall removes the task. Already-installed copies can register the task once via `helpers\register_touchpad_task_once.bat` (Run as administrator).
 - **Secure Desktop Transition**: When Windows displays a User Account Control (UAC) elevation consent or credential dialog, the OS automatically dims the screen and switches the active desktop from `Default` to the isolated **Secure Desktop** (`Consent.exe`).
 - **Hook Isolation on Secure Desktop**: Because user-mode input hooks are attached to the interactive user desktop (`Default`), they cannot intercept or swallow keystrokes or clicks while the user is interacting with the UAC prompt.
 - **Return to Normal Operation**: As soon as the UAC prompt is accepted, cancelled, or dismissed, Windows returns the session to the `Default` desktop. `input-locker` hooks resume global input suppression immediately and seamlessly.
