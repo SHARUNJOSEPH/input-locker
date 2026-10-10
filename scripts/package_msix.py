@@ -7,15 +7,32 @@ AppxBlockMap.xml with SHA-256 block hashing.
 from __future__ import annotations
 
 import base64
+import glob
 import hashlib
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
 BLOCK_SIZE = 65536  # 64 KB Appx block size
+
+
+def find_makeappx() -> str | None:
+    """Find official Microsoft MakeAppx.exe from PATH, electron-builder cache, or Windows Kits."""
+    which = shutil.which("makeappx.exe") or shutil.which("makeappx")
+    if which:
+        return which
+    pattern = os.path.expandvars(r"%LOCALAPPDATA%\electron-builder\cache\winCodeSign-*\*\windows-10\x64\makeappx.exe")
+    matches = glob.glob(pattern)
+    if matches:
+        return matches[0]
+    kit_matches = glob.glob(r"C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe")
+    if kit_matches:
+        return kit_matches[-1]
+    return None
 
 
 def compute_blockmap_for_file(file_path: Path, rel_name: str) -> tuple[int, int, list[str]]:
@@ -135,16 +152,30 @@ def build_msix_package(
     if msix_path.exists():
         msix_path.unlink()
 
-    # Images are stored (compression=0), others are deflated (compression=8)
-    with zipfile.ZipFile(msix_path, "w") as zf:
-        for rel_name in file_order:
-            local_path = staging_dir / Path(rel_name)
-            compress = zipfile.ZIP_STORED if rel_name.endswith((".png", ".jpg")) else zipfile.ZIP_DEFLATED
-            zf.write(local_path, arcname=rel_name.replace("\\", "/"), compress_type=compress)
+    makeappx = find_makeappx()
+    if makeappx:
+        print(f"Packaging with official Microsoft MakeAppx: {makeappx}")
+        # Clean temporary xml files before MakeAppx runs as MakeAppx creates them
+        if blockmap_path.exists():
+            blockmap_path.unlink()
+        if content_types_path.exists():
+            content_types_path.unlink()
+        cmd = [makeappx, "pack", "/d", str(staging_dir), "/p", str(msix_path), "/o"]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            raise RuntimeError(f"MakeAppx failed ({res.returncode}):\n{res.stderr or res.stdout}")
+    else:
+        print("MakeAppx not found; falling back to Python zip packaging...")
+        # Images are stored (compression=0), others are deflated (compression=8)
+        with zipfile.ZipFile(msix_path, "w") as zf:
+            for rel_name in file_order:
+                local_path = staging_dir / Path(rel_name)
+                compress = zipfile.ZIP_STORED if rel_name.endswith((".png", ".jpg")) else zipfile.ZIP_DEFLATED
+                zf.write(local_path, arcname=rel_name.replace("\\", "/"), compress_type=compress)
 
-        # Write AppxBlockMap.xml and [Content_Types].xml
-        zf.write(blockmap_path, arcname="AppxBlockMap.xml", compress_type=zipfile.ZIP_DEFLATED)
-        zf.write(content_types_path, arcname="[Content_Types].xml", compress_type=zipfile.ZIP_DEFLATED)
+            # Write AppxBlockMap.xml and [Content_Types].xml
+            zf.write(blockmap_path, arcname="AppxBlockMap.xml", compress_type=zipfile.ZIP_DEFLATED)
+            zf.write(content_types_path, arcname="[Content_Types].xml", compress_type=zipfile.ZIP_DEFLATED)
 
     print(f"Successfully generated MSIX: {msix_path} ({msix_path.stat().st_size / (1024 * 1024):.2f} MB)")
     validate_msix_package(msix_path, expected_version=version)
