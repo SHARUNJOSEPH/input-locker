@@ -13,17 +13,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases/latest">
-    <img src="https://img.shields.io/badge/⬇️%20Download-Input%20Locker%20(Windows%20.exe)-0A84FF?style=for-the-badge&logo=windows&logoColor=white" alt="Download Input Locker" />
+  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.11/InputLocker-Setup-v0.2.11.exe">
+    <img src="https://img.shields.io/badge/⬇️%20Download-Input%20Locker%20v0.2.11%20(Setup%20.exe)-0A84FF?style=for-the-badge&logo=windows&logoColor=white" alt="Download Input Locker v0.2.11 Setup" />
   </a>
-  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases/latest">
-    <img src="https://img.shields.io/badge/📦%20Download-Portable%20Zip%20Package-1E293B?style=for-the-badge&logo=windows&logoColor=white" alt="Download Portable Zip" />
+  <a href="https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.11/InputLocker-v0.2.11-Windows-x64.zip">
+    <img src="https://img.shields.io/badge/📦%20Download-Portable%20Zip%20(v0.2.11)-1E293B?style=for-the-badge&logo=windows&logoColor=white" alt="Download Portable Zip v0.2.11" />
   </a>
   <a href="https://github.com/users/SHARUNJOSEPH/projects/3">
     <img src="https://img.shields.io/badge/🚀%20Roadmap-Releases%20%26%20Backlog-4F46E5?style=for-the-badge&logo=github&logoColor=white" alt="Roadmap & Releases" />
   </a>
   <a href="https://github.com/SHARUNJOSEPH/input-locker/releases">
-    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.10-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
+    <img src="https://img.shields.io/badge/🏷️%20All%20Releases-v0.2.11-312E81?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" />
   </a>
 </p>
 
@@ -58,12 +58,13 @@ A high-performance, zero-latency background utility engineered for Windows live 
 
 ---
 
-### 📦 Manual / Sideload Downloads (GitHub Releases)
+### 📦 Manual / Sideload Downloads (GitHub Releases — v0.2.11)
 
 | Package | Format | Architecture | Download Link |
 | :--- | :---: | :---: | :--- |
-| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.10.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.10/InputLocker-Setup-v0.2.10.exe) |
-| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.10-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.10/InputLocker-v0.2.10-Windows-x64.zip) |
+| **Input Locker Windows Installer** | Setup Wizard (.exe) | Windows 10 / 11 (64-bit) | [💿 **Download `InputLocker-Setup-v0.2.11.exe`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.11/InputLocker-Setup-v0.2.11.exe) |
+| **Input Locker Portable Bundle** | `.zip` | Windows 10 / 11 (64-bit) | [📦 **Download `InputLocker-v0.2.11-Windows-x64.zip`**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.11/InputLocker-v0.2.11-Windows-x64.zip) |
+| **Input Locker Standalone Exe** | `.exe` | Windows 10 / 11 (64-bit) | [⚡ **Download `InputLocker.exe` (v0.2.11)**](https://github.com/SHARUNJOSEPH/input-locker/releases/download/v0.2.11/InputLocker.exe) |
 | **All Versions & Release Notes** | Web | Any Browser | [🏷️ **Browse All Releases**](https://github.com/SHARUNJOSEPH/input-locker/releases) |
 
 ### ⚡ Command-Line Install (`winget`)
@@ -77,14 +78,14 @@ winget install SharunJoseph.InputLocker
 
 ## 🚀 How to Use Input Locker
 
-1. **Launch**: Double-click **`InputLocker.exe`**.
+1. **Launch**: Double-click **`InputLocker.exe`** (or launch from Start Menu / Desktop shortcut).
    - On first launch, a helpful **Interactive Tutorial Guide** and the **Apple-style Settings** panel will appear.
 2. **Lock Screen**:
-   - Press <kbd>F11</kbd> at any time, or click **"🔒 Lock Screen Now"** in settings.
-   - All mouse and keyboard inputs will be completely blocked while keeping your background video/audio engines running smoothly.
+   - Press <kbd>F11</kbd> at any time (or your custom Lock Hotkey), or click **"🔒 Lock Screen Now"** in Settings.
+   - All mouse, keyboard, and Precision Touchpad multi-finger gesture inputs are completely blocked while keeping your background video/audio engines running smoothly.
 3. **Unlock Screen**:
-   - Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>U</kbd> together.
-   - If a password is set, the secure unlock prompt will appear; otherwise, it unlocks instantly.
+   - Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>U</kbd> (or choose the modifiers-only **`CAS`** preset <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> or any custom single-key/combo trigger in Settings).
+   - If a password is set, the secure unlock prompt appears (supports both direct <kbd>Enter</kbd> and <kbd>Tab</kbd> + <kbd>Enter</kbd> keyboard navigation); otherwise, it unlocks instantly.
 4. **Single-Instance Protection**:
    - Double-clicking the app icon while running will simply bring the existing settings window to the front — preventing duplicate processes or multiple windows.
 
@@ -165,8 +166,10 @@ python -m input_locker.main
 
 | Hotkey / Trigger | Action | Latency | Behavior & Fail-Safe Role |
 |------------------|--------|---------|---------------------------|
-| `F11` | **Activate Lock** | < 200 ms (typ. < 3 ms) | Transitions from `UNLOCKED` to `LOCKED`. Swallows `F11` keydown/keyup so background players (e.g. fullscreen toggle) are not triggered. |
-| `Ctrl + Alt + Shift + U` | **Deactivate Lock (Manual Fail-Safe)** | < 200 ms (typ. < 3 ms) | Primary manual fail-safe unlock sequence. Instantly transitions from `LOCKED` to `UNLOCKED`, unclips cursor bounds (`ClipCursor(None)`), reveals cursor (`ShowCursor(True)`), hides overlay, and swallows subsequent modifier keyups to prevent key leakage. Can be invoked at any time if network control drops. |
+| `F11` *(Configurable)* | **Activate Lock** | < 200 ms (typ. < 3 ms) | Transitions from `UNLOCKED` to `LOCKED`. Swallows `F11` keydown/keyup so background players (e.g. fullscreen toggle) are not triggered. |
+| `Ctrl + Alt + Shift + U` / `Ctrl + Alt + Shift` (`CAS`) / Single-Key *(Configurable)* | **Deactivate Lock (Manual Fail-Safe)** | < 200 ms (typ. < 3 ms) | Primary manual fail-safe unlock sequence (supports modifiers-only `Ctrl+Alt+Shift`, multi-key combos, or single-key triggers like `U` / `A` / `K`). Transitions from `LOCKED` to `UNLOCKED` (or opens the password prompt if password-protected), unclips cursor bounds (`ClipCursor(None)`), reveals cursor (`ShowCursor(True)`), restores Precision Touchpad, hides overlay, and swallows subsequent modifier keyups to prevent key leakage. |
+| `4x Esc` *(Rapid within 1.5s)* | **Emergency Keyboard Fail-Safe** | < 200 ms | Pressing `Esc` 4 times rapidly while locked triggers the unlock flow (or password prompt) if the operator forgets a custom unlock combo. |
+| Tray **Recover Mouse / Touchpad** | **On-Demand Input Recovery** | Immediate | Restores cursor visibility and re-enables Precision Touchpad devices directly from the system tray menu. |
 | `SIGINT` / `SIGTERM` (Ctrl+C / Kill) | **Process Emergency Teardown** | Immediate | Automatic fail-safe cleanup: OS signal handlers invoke `_emergency_cleanup()` to unclip cursor, restore cursor visibility, hide overlay, and unhook low-level hooks. |
 | Process Crash / `atexit` | **Crash Protection Fail-Safe** | Immediate | Python runtime `atexit` hook guarantees `ClipCursor(None)` and `ShowCursor(True)` even upon unhandled fatal interpreter exceptions. |
 
@@ -353,8 +356,8 @@ Input Locker is engineered to meet top-tier software engineering, security, and 
 - For complete privacy commitments, see [PRIVACY.md](PRIVACY.md).
 
 ### Version Updates & Release Notifications
-- **Automated Update Checker**: When enabled, Input Locker checks GitHub Releases non-blockingly upon launch in a low-priority background thread.
-- **In-App & Tray Alerts**: When a newer release is published, an update banner appears in the Settings UI with release notes and a direct download button. The system tray context menu also provides an on-demand "Check for Updates..." option.
+- **Automated Update Checker**: When enabled, Input Locker checks GitHub Releases non-blockingly upon launch in a low-priority background thread with strict downgrade prevention.
+- **Resolume-Style Software Update Manager**: Accessible from **Settings** (header pill & Updates card), **About**, and the **System Tray** right-click menu (`Check for Updates...`), featuring version comparison badges, formatted release highlights, background download progress, and one-click `Install & Restart`.
 - **Show-Safe**: Update checks are strictly non-disruptive and will never fire or interrupt an active locked state or live production performance.
 
 ---
