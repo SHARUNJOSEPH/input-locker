@@ -14,7 +14,6 @@ import sys
 import threading
 import time
 from typing import Any, Optional
-
 from input_locker.core.state_machine import (
     LockerState,
     StateMachine,
@@ -23,32 +22,22 @@ from input_locker.hooks.hook_manager import HookManager
 from input_locker.overlay.overlay_manager import OverlayManager
 from input_locker.overlay.touchpad_guard import TouchpadGuard
 
-import queue
-
 logger = logging.getLogger(__name__)
 
-_disable_lock_queue: queue.Queue = queue.Queue()
 
-def _disable_lock_worker() -> None:
-    while True:
-        try:
-            disabled = _disable_lock_queue.get()
-            import winreg
-            key_path = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
-            with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as k:
-                winreg.SetValueEx(k, "DisableLockWorkstation", 0, winreg.REG_DWORD, 1 if disabled else 0)
-        except Exception:
-            pass
-        finally:
-            _disable_lock_queue.task_done()
-
-_disable_lock_thread = threading.Thread(target=_disable_lock_worker, daemon=True, name="DisableLockWorker")
-_disable_lock_thread.start()
-
-
-def _set_disable_lock_workstation(disabled: bool) -> None:
-    """Attempt to toggle DisableLockWorkstation in registry asynchronously without thread spawning."""
-    _disable_lock_queue.put(bool(disabled))
+def _force_cursor_visible() -> None:
+    """Best-effort ClipCursor(NULL) + ShowCursor restore that does not need overlay state."""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.ClipCursor(None)
+        # ShowCursor uses a per-thread display counter; drive it positive.
+        for _ in range(64):
+            if user32.ShowCursor(True) >= 0:
+                break
+        user32.SetCursorPos(200, 200)
+    except Exception as exc:
+        logger.debug("force_cursor_visible failed: %s", exc)
 
 
 class LockerController:
@@ -332,9 +321,12 @@ class LockerController:
                 # Step 1: Transition state machine to LOCKING
                 self.state_machine.transition_to(LockerState.LOCKING)
 
-                # Step 2: Engage OS input swallowing immediately
+                # Step 2: Engage OS input swallowing immediately.
+                # Win+L policy (HKLM DisableLockWorkstation) is set at install /
+                # helper start and left alone here — mid-session toggles do not
+                # affect Win+L until the next sign-in, and the helper round-trip
+                # added ~100ms to every lock.
                 self.hook_manager.set_swallow(True)
-                _set_disable_lock_workstation(True)
 
                 # Step 3: Confine cursor to (0, 0) and hide cursor shape
                 self.overlay_manager.confine_cursor()
@@ -393,11 +385,28 @@ class LockerController:
 
         def _watchdog_loop():
             user32 = None
+            last_desktop = None
+            saw_secure_gap = False  # True after OpenInputDesktop failed while locked
             try:
                 import ctypes
                 user32 = ctypes.windll.user32
             except Exception:
                 pass
+
+            def _input_desktop_id():
+                """Return a stable id for the current input desktop, or None."""
+                if not user32:
+                    return None
+                try:
+                    h = user32.OpenInputDesktop(0, False, 0x0001)  # DESKTOP_READOBJECTS
+                    if not h:
+                        return None
+                    try:
+                        return int(h)
+                    finally:
+                        user32.CloseDesktop(h)
+                except Exception:
+                    return None
 
             while not self._watchdog_stop_event.is_set() and self.is_locked():
                 try:
@@ -405,49 +414,110 @@ class LockerController:
                         break
                     if not self.is_locked() or self._watchdog_stop_event.is_set():
                         break
+
+                    # Detect Win+L Secure Desktop round-trip:
+                    #   default desktop → (OpenInputDesktop fails) → default again
+                    # or a changed desktop handle. Then recover so pad/pointer are not stranded.
+                    desk = _input_desktop_id()
+                    returned_from_secure = False
+                    if desk is None:
+                        if last_desktop is not None:
+                            saw_secure_gap = True
+                    else:
+                        if saw_secure_gap:
+                            returned_from_secure = True
+                            saw_secure_gap = False
+                        elif last_desktop is not None and desk != last_desktop:
+                            returned_from_secure = True
+                        last_desktop = desk
+
+                    if returned_from_secure:
+                        logger.warning(
+                            "Returned from Secure Desktop while Input Locker still "
+                            "LOCKED — recovering cursor/touchpad/overlay"
+                        )
+                        if getattr(self.hook_manager.event_filter, "password_mode", False):
+                            # Password dialog is open — do NOT pin cursor to (0,0) or raise
+                            # the lock overlay on top of the password dialog!
+                            continue
+                        try:
+                            self.recover_input()
+                        except Exception as exc:
+                            logger.debug("post-Win+L recover_input: %s", exc)
+                        try:
+                            self.overlay_manager.confine_cursor()
+                        except Exception:
+                            pass
+                        try:
+                            if hasattr(self.overlay_manager, "overlay") and hasattr(
+                                self.overlay_manager.overlay, "show"
+                            ):
+                                self.overlay_manager.overlay.show()
+                        except Exception:
+                            pass
                     # If password entry dialog is active, let it manage confinement
                     if getattr(self.hook_manager.event_filter, "password_mode", False):
                         continue
 
-                    # Active Task View interceptor (narrow class list only).
+                    # Shell escape interceptor (narrow class list only).
+                    # Covers Task View AND Start / Search hosts that can appear if a
+                    # Win key or Ctrl+Esc leaks past the user-mode hook.
                     # Do NOT match ApplicationFrameWindow / empty-title CoreWindow —
                     # those classes are shared by UWP staging apps and would steal
-                    # focus or dismiss password UI. Rely on TouchpadGuard + raw-touch
-                    # registration to stop most PTP gestures at the source.
+                    # focus or dismiss password UI.
                     if user32:
                         try:
-                            _TASK_VIEW_CLASSES = (
+                            # Titles that identify Start/Search CoreWindow hosts.
+                            # Empty-title CoreWindows are intentionally ignored.
+                            _START_TITLES = (
+                                "Start",
+                                "Search",
+                                "SearchUI",
+                            )
+
+                            def _dismiss_hwnd(hw) -> None:
+                                user32.ShowWindow(hw, 0)  # SW_HIDE
+                                user32.PostMessageW(hw, 0x0010, 0, 0)  # WM_CLOSE
+                                # Injected Esc (tagged with 0x494C4F4B so hook lets it through)
+                                user32.keybd_event(0x1B, 0, 0, 0x494C4F4B)
+                                user32.keybd_event(0x1B, 0, 0x0002, 0x494C4F4B)
+                                if hasattr(self.overlay_manager, "overlay") and hasattr(
+                                    self.overlay_manager.overlay, "show"
+                                ):
+                                    self.overlay_manager.overlay.show()
+
+                            def _is_start_like(hwnd) -> bool:
+                                cls_buf = ctypes.create_unicode_buffer(256)
+                                user32.GetClassNameW(hwnd, cls_buf, 256)
+                                cls_name = cls_buf.value
+                                if cls_name in (
+                                    "XamlExplorerHostIslandWindow",
+                                    "MultitaskingViewFrame",
+                                    "ImmersiveLauncher",
+                                    "SearchPane",
+                                ):
+                                    return True
+                                if cls_name == "Windows.UI.Core.CoreWindow":
+                                    title_buf = ctypes.create_unicode_buffer(256)
+                                    user32.GetWindowTextW(hwnd, title_buf, 256)
+                                    title = title_buf.value or ""
+                                    return any(t.lower() in title.lower() for t in _START_TITLES) if title else False
+                                return False
+
+                            fg = user32.GetForegroundWindow()
+                            if fg and _is_start_like(fg):
+                                _dismiss_hwnd(fg)
+
+                            for target_cls in (
                                 "XamlExplorerHostIslandWindow",
                                 "MultitaskingViewFrame",
-                            )
-                            fg = user32.GetForegroundWindow()
-                            if fg:
-                                cls_buf = ctypes.create_unicode_buffer(256)
-                                user32.GetClassNameW(fg, cls_buf, 256)
-                                cls_name = cls_buf.value
-                                if cls_name in _TASK_VIEW_CLASSES:
-                                    user32.ShowWindow(fg, 0)  # SW_HIDE
-                                    user32.PostMessageW(fg, 0x0010, 0, 0)  # WM_CLOSE
-                                    user32.keybd_event(0x1B, 0, 0, 0)
-                                    user32.keybd_event(0x1B, 0, 0x0002, 0)
-                                    if hasattr(self.overlay_manager, "overlay") and hasattr(
-                                        self.overlay_manager.overlay, "show"
-                                    ):
-                                        self.overlay_manager.overlay.show()
-
-                            for target_cls in _TASK_VIEW_CLASSES:
+                                "ImmersiveLauncher",
+                            ):
                                 hw = user32.FindWindowW(target_cls, None)
                                 if hw:
-                                    user32.ShowWindow(hw, 0)
-                                    user32.PostMessageW(hw, 0x0010, 0, 0)
-                                    user32.keybd_event(0x1B, 0, 0, 0)
-                                    user32.keybd_event(0x1B, 0, 0x0002, 0)
-                                    if hasattr(self.overlay_manager, "overlay") and hasattr(
-                                        self.overlay_manager.overlay, "show"
-                                    ):
-                                        self.overlay_manager.overlay.show()
+                                    _dismiss_hwnd(hw)
                         except Exception as exc:
-                            logger.debug("Task View dismiss check error: %s", exc)
+                            logger.debug("Shell escape dismiss check error: %s", exc)
 
                     # Re-enforce cursor confinement to (0, 0)
                     if not self.overlay_manager.cursor_guard.is_confined():
@@ -466,6 +536,9 @@ class LockerController:
         """Handle unlock hotkey or tray click — gate on password if one is configured."""
         if not self.is_locked():
             return
+        if getattr(self, "_password_dialog_open", False):
+            logger.debug("Password dialog already open; ignoring duplicate unlock request")
+            return
 
         has_pwd = bool(self._password or self._password_hash)
         if not has_pwd:
@@ -477,6 +550,7 @@ class LockerController:
         # Enable password entry mode in hook manager:
         # - Normal text input keys reach the password prompt
         # - System task-switching shortcuts (Alt+Tab, Win, Alt+Esc, Ctrl+Esc) are STRICTLY SWALLOWED!
+        self._password_dialog_open = True
         self.hook_manager.set_swallow(False)
         self.hook_manager.set_password_mode(True)
         try:
@@ -516,6 +590,8 @@ class LockerController:
             self.hook_manager.set_password_mode(False)
             self.hook_manager.set_swallow(True)
             self.overlay_manager.confine_cursor()
+        finally:
+            self._password_dialog_open = False
 
     def unlock(self) -> bool:
         """Execute the 5-step atomic unlock deactivation sequence.
@@ -542,13 +618,20 @@ class LockerController:
             try:
                 self._watchdog_stop_event.set()
                 self.state_machine.transition_to(LockerState.UNLOCKING)
-                _set_disable_lock_workstation(False)
+                # Win+L policy (HKLM) is owned by install/uninstall + helper start.
+                # Do NOT clear it on unlock — mid-session toggles do not affect Win+L
+                # until the next sign-in anyway, and clearing adds ~100ms + risk.
                 try:
                     TouchpadGuard.restore_touchpad()
                 except Exception as exc:
                     logger.debug("TouchpadGuard restore during unlock failed: %s", exc)
                 self.overlay_manager.hide_overlay()
-                self.overlay_manager.release_cursor()
+                # Cursor release is critical — always force-visible even if overlay path fails.
+                try:
+                    self.overlay_manager.release_cursor()
+                except Exception as exc:
+                    logger.warning("release_cursor during unlock failed: %s", exc)
+                _force_cursor_visible()
                 self.hook_manager.set_swallow(False)
                 self.state_machine.transition_to(LockerState.UNLOCKED)
 
@@ -597,6 +680,11 @@ class LockerController:
     def _safe_rollback(self) -> None:
         """Emergency rollback ensuring user input is restored on sequence failure."""
         try:
+            self._watchdog_stop_event.set()
+        except Exception:
+            pass
+        # Do NOT clear HKLM DisableLockWorkstation — install owns that policy.
+        try:
             TouchpadGuard.restore_touchpad()
         except Exception:
             pass
@@ -608,16 +696,53 @@ class LockerController:
             self.overlay_manager.release_cursor()
         except Exception:
             pass
+        _force_cursor_visible()
         try:
             self.hook_manager.set_swallow(False)
         except Exception:
             pass
+        try:
+            self.hook_manager.set_password_mode(False)
+        except Exception:
+            pass
         self.state_machine.reset()
+
+    def recover_input(self) -> None:
+        """Tray/emergency helper: restore cursor + touchpad without a full unlock dance.
+
+        Safe to call while unlocked (e.g. after a Win+L strand left the pointer hidden
+        or a previous build left the touchpad disabled).
+        """
+        logger.info("recover_input invoked — forcing cursor visible + touchpad restore")
+        # Do NOT clear HKLM DisableLockWorkstation — install owns that policy.
+        try:
+            TouchpadGuard.restore_touchpad()
+        except Exception as exc:
+            logger.debug("recover_input touchpad restore: %s", exc)
+        try:
+            TouchpadGuard.recover_if_stale()
+        except Exception as exc:
+            logger.debug("recover_input recover_if_stale: %s", exc)
+        try:
+            self.overlay_manager.release_cursor()
+        except Exception:
+            pass
+        _force_cursor_visible()
+        try:
+            self.hook_manager.set_swallow(False)
+            self.hook_manager.set_password_mode(False)
+        except Exception:
+            pass
 
     def _emergency_cleanup(self) -> None:
         """Atexit handler guaranteeing cursor and hook restoration on process exit."""
         try:
             self.stop()
+        except Exception:
+            pass
+        _force_cursor_visible()
+        try:
+            TouchpadGuard.restore_touchpad()
         except Exception:
             pass
 

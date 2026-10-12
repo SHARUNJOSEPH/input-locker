@@ -128,16 +128,63 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configure console logging format and level."""
+    """Configure console and file logging format and level."""
+    import os
+
     log_level = logging.DEBUG if verbose else logging.INFO
     log_format = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
+
+    # Always write a persistent log file so pythonw.exe / shortcut launches can be inspected
+    log_candidates: List[Path] = []
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    if (repo_root / "src" / "input_locker").exists():
+        log_candidates.append(repo_root / "locker_log_repro.txt")
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        app_log_dir = Path(local_app_data) / "InputLocker"
+        try:
+            app_log_dir.mkdir(parents=True, exist_ok=True)
+            log_candidates.append(app_log_dir / "input_locker.log")
+        except Exception:
+            pass
+
+    root_logger = logging.getLogger()
+    existing_files = {
+        getattr(h, "baseFilename", None) for h in root_logger.handlers
+    }
+    primary_log_stream = None
+    for log_path in log_candidates:
+        try:
+            resolved_str = str(log_path.resolve())
+            if resolved_str not in existing_files:
+                fh = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+                fh.setLevel(log_level)
+                fh.setFormatter(logging.Formatter(log_format))
+                root_logger.addHandler(fh)
+                if primary_log_stream is None:
+                    primary_log_stream = fh.stream
+        except Exception:
+            pass
+
+    # Under pythonw.exe on Windows, sys.stdout and sys.stderr are None,
+    # which causes any print() or C/Qt stderr write to raise AttributeError.
+    if primary_log_stream is not None:
+        if sys.stdout is None:
+            sys.stdout = primary_log_stream
+        if sys.stderr is None:
+            sys.stderr = primary_log_stream
+
     logging.basicConfig(level=log_level, format=log_format)
+    root_logger.setLevel(log_level)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI execution routine."""
     args = parse_args(argv)
     setup_logging(args.verbose)
+    logger.info("=== Input Locker launch (pid=%s, executable=%s, cwd=%s) ===",
+                __import__("os").getpid(), sys.executable, Path.cwd())
 
     # ── Windows Taskbar AppUserModelID Setup ─────────────────────────────
     # Ensures Windows displays the application icon on the taskbar instead of python.exe
@@ -156,20 +203,50 @@ def main(argv: Optional[List[str]] = None) -> int:
         single_instance.notify_existing_instance()
         return 0
 
-    # ── Touchpad device safety (elevated disable is opt-in) ───────────────
-    # Prefer the install-time scheduled task (schtasks /Run, no UAC). Portable
-    # / source runs fall back to a one-shot RunAs helper. Device cut runs in
-    # the background after the overlay appears so lock feels instant; warm the
-    # PnP ID cache here so that background cut is also fast.
-    try:
-        from input_locker.overlay.touchpad_guard import TouchpadGuard
-        TouchpadGuard.device_control_enabled = True
-        # Start the helper first so crash-recovery re-enable uses it.
-        TouchpadGuard.ensure_elevated_helper()
-        TouchpadGuard.recover_if_stale()
-        TouchpadGuard.warm_device_cache()
-    except Exception as exc:
-        logger.debug("Touchpad recovery/setup failed: %s", exc)
+    # ── Touchpad + Win+L helper (background warm-up so GUI opens instantly) ─
+    # PnP device disable is required to stop Dell/Alps 3/4-finger gestures.
+    # Force it ON for this stabilization build (ignore a stale config=false that
+    # left gestures open). Helper also writes HKLM DisableLockWorkstation so
+    # Win+L works even when HKCU Policies\\System is Access Denied (seen on this PC).
+    def _startup_touchpad_init() -> None:
+        try:
+            from input_locker.overlay.touchpad_guard import TouchpadGuard
+            from input_locker.config import LockerConfig as _CfgForTouchpad
+            _tp_cfg = _CfgForTouchpad.load()
+            want_device = True
+            if hasattr(_tp_cfg, "touchpad_device_control") and _tp_cfg.touchpad_device_control is False:
+                logger.warning(
+                    "config.touchpad_device_control was false — forcing ON so 3/4-finger "
+                    "gestures can be cut (Dell/Alps registry-only is insufficient)"
+                )
+                _tp_cfg.touchpad_device_control = True
+                try:
+                    _tp_cfg.save()
+                except Exception as exc:
+                    logger.debug("Could not persist touchpad_device_control=true: %s", exc)
+            TouchpadGuard.device_control_enabled = want_device
+            helper_ok = TouchpadGuard.ensure_elevated_helper()
+            if helper_ok:
+                TouchpadGuard.set_lock_workstation_policy(True)
+            TouchpadGuard.warm_device_cache()
+            TouchpadGuard.recover_if_stale()
+            logger.info(
+                "Touchpad device (PnP) control: ENABLED (helper_running=%s)",
+                helper_ok,
+            )
+            if not helper_ok:
+                logger.warning(
+                    "Elevated helper NOT running — Win+L HKLM policy and PnP cut will fail. "
+                    "Check scheduled task \\InputLocker\\InputLockerTouchpadHelper"
+                )
+        except Exception as exc:
+            logger.debug("Touchpad recovery/setup failed: %s", exc)
+
+    threading.Thread(
+        target=_startup_touchpad_init,
+        name="TouchpadStartupInit",
+        daemon=True,
+    ).start()
 
     logger.info("Starting Windows AV Staging Input Locker v%s...", __version__)
     logger.info("Overlay backend: %s (alpha=%d)", args.backend, args.alpha)
@@ -274,16 +351,47 @@ def main(argv: Optional[List[str]] = None) -> int:
         def _tray_unlock():
             controller._on_unlock_requested()
 
+        def _tray_recover_input():
+            try:
+                controller.recover_input()
+                if tray is not None:
+                    tray.notify(
+                        "Input Locker",
+                        "Mouse pointer restored. Touchpad re-enabled if it was cut.",
+                    )
+            except Exception as exc:
+                logger.warning("Tray recover_input failed: %s", exc)
+
         def _tray_exit():
             shutdown_event.set()
             settings_ctrl.destroy()
 
         def _tray_about():
+            if controller.is_locked():
+                return
             try:
                 from input_locker.ui.config_gui import show_about_dialog
-                show_about_dialog()
+                settings_ctrl.root.after(
+                    0, lambda: show_about_dialog(parent=settings_ctrl.root)
+                )
             except Exception as exc:
                 logger.debug("Tray About failed: %s", exc)
+
+        def _tray_check_updates():
+            if controller.is_locked():
+                return
+            try:
+                from input_locker.ui.update_dialog import show_software_update_dialog
+                settings_ctrl.root.after(
+                    0,
+                    lambda: show_software_update_dialog(
+                        parent=settings_ctrl.root,
+                        auto_check=True,
+                        repo_or_url=getattr(locker_cfg, "update_repo", ""),
+                    ),
+                )
+            except Exception as exc:
+                logger.debug("Tray Check Updates failed: %s", exc)
 
         tray = TrayIcon(
             on_lock=controller.lock,
@@ -291,6 +399,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             on_exit=_tray_exit,
             on_settings=_request_show_settings,
             on_about=_tray_about,
+            on_recover_input=_tray_recover_input,
+            on_check_updates=_tray_check_updates,
         )
         tray.start()
     except Exception as exc:
@@ -384,4 +494,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception:
+        logger.exception("Unhandled fatal exception in Input Locker:")
+        raise
+

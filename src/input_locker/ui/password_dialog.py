@@ -165,27 +165,37 @@ def show_password_dialog(
                 root.destroy()
 
             pw_entry.bind("<Return>", _submit)
+            pw_entry.bind("<KP_Enter>", _submit)
             pw_entry.bind("<Escape>", _cancel)
+            root.bind("<Escape>", _cancel)
 
-            # Buttons
+            # Buttons — create unlock_btn first so first Tab from pw_entry selects Unlock!
             btn_row = tk.Frame(root, bg=BG)
             btn_row.pack(fill="x", padx=24, pady=(8, 16))
-
-            cancel_btn = tk.Button(
-                btn_row, text="Cancel", command=_cancel,
-                bg=CARD, fg=TEXT, activebackground=BORDER, activeforeground=TEXT,
-                relief="flat", padx=14, pady=6, font=("Segoe UI", 10),
-                cursor="hand2",
-            )
-            cancel_btn.pack(side="left")
 
             unlock_btn = tk.Button(
                 btn_row, text="  Unlock  ", command=_submit,
                 bg=ACCENT, fg=TEXT, activebackground=AHOVER, activeforeground=TEXT,
                 relief="flat", padx=16, pady=6, font=("Segoe UI", 10, "bold"),
-                cursor="hand2",
+                highlightthickness=2, highlightbackground=BG, highlightcolor="#FFFFFF",
+                takefocus=True, cursor="hand2",
             )
             unlock_btn.pack(side="right")
+            unlock_btn.bind("<Return>", lambda e: (_submit(), "break")[1])
+            unlock_btn.bind("<KP_Enter>", lambda e: (_submit(), "break")[1])
+            unlock_btn.bind("<space>", lambda e: (_submit(), "break")[1])
+
+            cancel_btn = tk.Button(
+                btn_row, text="Cancel", command=_cancel,
+                bg=CARD, fg=TEXT, activebackground=BORDER, activeforeground=TEXT,
+                relief="flat", padx=14, pady=6, font=("Segoe UI", 10),
+                highlightthickness=2, highlightbackground=BG, highlightcolor=ACCENT,
+                takefocus=True, cursor="hand2",
+            )
+            cancel_btn.pack(side="left")
+            cancel_btn.bind("<Return>", lambda e: (_cancel(), "break")[1])
+            cancel_btn.bind("<KP_Enter>", lambda e: (_cancel(), "break")[1])
+            cancel_btn.bind("<space>", lambda e: (_cancel(), "break")[1])
 
             root.protocol("WM_DELETE_WINDOW", _cancel)
 
@@ -198,13 +208,40 @@ def show_password_dialog(
             root_hwnd = user32.GetAncestor(root.winfo_id(), 2) or root.winfo_id()
 
             def _apply_focus():
+                if not root.winfo_exists():
+                    return
+                # HWND_TOPMOST = -1, SWP_NOSIZE(1) | SWP_NOMOVE(2) | SWP_SHOWWINDOW(0x40)
+                user32.SetWindowPos(root_hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
                 _force_window_focus(root_hwnd)
-                pw_entry.focus_force()
-                pw_entry.focus_set()
+                current_focus = root.focus_get()
+                if current_focus not in (pw_entry, unlock_btn, cancel_btn):
+                    pw_entry.focus_force()
+                    pw_entry.focus_set()
+
+            def _periodic_keep_on_top():
+                if not root.winfo_exists():
+                    return
+                try:
+                    user32.SetWindowPos(root_hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0040)
+                    fg = user32.GetForegroundWindow()
+                    if fg != root_hwnd:
+                        _force_window_focus(root_hwnd)
+                        target_widget = root.focus_get()
+                        if target_widget not in (pw_entry, unlock_btn, cancel_btn):
+                            target_widget = pw_entry
+                        target_widget.focus_force()
+                        target_widget.focus_set()
+                    if on_ready:
+                        on_ready(pos_x, pos_y, W, H)
+                except Exception:
+                    pass
+                if root.winfo_exists():
+                    root.after(250, _periodic_keep_on_top)
 
             _apply_focus()
             root.after(50, _apply_focus)
             root.after(150, _apply_focus)
+            root.after(250, _periodic_keep_on_top)
 
             # Notify caller of dialog bounds so mouse can be confined to it
             if on_ready:
@@ -213,6 +250,7 @@ def show_password_dialog(
                 except Exception as exc:
                     logger.debug("on_ready callback error: %s", exc)
 
+            logger.info("Password dialog displayed and focused (hwnd=%s)", root_hwnd)
             root.mainloop()
         except Exception as exc:
             logger.error("Password dialog error: %s", exc)

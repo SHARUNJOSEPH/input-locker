@@ -60,6 +60,7 @@ jobs:
             dist/InputLocker-Windows-x64.zip
             dist/InputLocker-*-Windows-x64.zip
             dist/InputLocker-Setup-v*.exe
+          body_path: docs/releases/${{ github.ref_name }}.md
           draft: false
           prerelease: false
           generate_release_notes: true

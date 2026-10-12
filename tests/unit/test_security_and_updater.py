@@ -464,7 +464,28 @@ class TestUpdater(unittest.TestCase):
 
         self.assertTrue(cancelled)
 
+    def test_parse_release_highlights_strips_markdown_and_ignores_full_changelog_url(self):
+        """Verify parse_release_highlights strips ** markers and ignores Full Changelog URLs."""
+        from input_locker.updater import parse_release_highlights
+
+        body = (
+            "## What's Changed\n"
+            "- **Fixed** password dialog Tab + Enter navigation\n"
+            "- Added `Ctrl+Alt+Shift` modifier-only unlock preset\n\n"
+            "**Full Changelog**: https://github.com/SHARUNJOSEPH/input-locker/compare/v0.2.8...v0.2.9"
+        )
+        items = parse_release_highlights(body)
+        self.assertEqual(len(items), 2)
+        self.assertNotIn("**", items[0])
+        self.assertFalse(any("Full Changelog" in item for item in items))
+
+        # Body with ONLY Full Changelog URL falls back to clean default highlights
+        only_url_body = "**Full Changelog**: https://github.com/SHARUNJOSEPH/input-locker/compare/v0.2.8...v0.2.9"
+        fallback_items = parse_release_highlights(only_url_body)
+        self.assertGreaterEqual(len(fallback_items), 3)
+        self.assertFalse(any("Full Changelog" in item for item in fallback_items))
+        self.assertFalse(any("**" in item for item in fallback_items))
 
 
-
-
+if __name__ == '__main__':
+    unittest.main()

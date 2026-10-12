@@ -135,8 +135,10 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     top.title(t("about_title"))
     top.resizable(False, False)
     top.configure(bg=BG)
-    top.transient(parent)
+    if parent and parent.winfo_viewable():
+        top.transient(parent)
     top.grab_set()
+    top.bind("<Escape>", lambda e: top.destroy())
 
     _refs: list = []
 
@@ -329,13 +331,19 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     up_sub.pack(anchor="w", pady=(2, 0))
 
     def _check_modal():
-        show_software_update_dialog(parent=top, auto_check=True)
+        try:
+            _repo = LockerConfig.load().update_repo
+        except Exception:
+            _repo = ""
+        show_software_update_dialog(parent=top, auto_check=True, repo_or_url=_repo)
 
     up_btn = tk.Button(
         up_row, text=t("btn_check_updates"), command=_check_modal,
         bg="#312E81", fg="#C7D2FE", activebackground="#3730A3", activeforeground="#FFFFFF",
         relief="flat", bd=1, padx=10, pady=4, font=("Segoe UI", 9, "bold"), cursor="hand2",
     )
+    up_btn.bind("<Return>", lambda e: (up_btn.invoke(), "break")[1])
+    up_btn.bind("<KP_Enter>", lambda e: (up_btn.invoke(), "break")[1])
     up_btn.pack(side="right")
 
     # ── What's New / Changelog ────────────────────────────────────────────
@@ -351,6 +359,9 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
     ).pack(anchor="w", padx=12, pady=(6, 4))
 
     for icon, headline in [
+        ("⚡", "v0.2.11 — Modifiers-only (Ctrl+Alt+Shift) & single-key unlock combo support"),
+        ("🔐", "v0.2.11 — Full Tab + Enter keyboard navigation on Password & Settings dialogs"),
+        ("✨", "v0.2.11 — Resolume-style Software Update manager with direct one-click install"),
         ("🌐", "v0.2.0 — Multi-Language Support (English, Spanish, French, German, Japanese, Chinese, Hindi)"),
         ("🎵", "v0.2.0 — Audio Feedback Cues on lock & unlock transitions"),
         ("⌨️", "v0.2.0 — Customizable Lock & Unlock Hotkeys in Settings"),
@@ -416,15 +427,18 @@ def show_about_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None) -> None:
         ft_row, text="© 2026 Joseph Sharun • MIT License",
         bg=BG, fg=TEXT_SUBTLE, font=("Segoe UI", 8),
     ).pack(side="left")
-    tk.Button(
+    close_btn = tk.Button(
         ft_row, text=t("btn_close"), command=top.destroy,
         bg=BTN_SEC_BG, fg=TEXT_PRIMARY, activebackground=BTN_SEC_HOVER, activeforeground=TEXT_PRIMARY,
         relief="flat", bd=1, padx=14, pady=4, font=("Segoe UI", 9), cursor="hand2",
-    ).pack(side="right")
+    )
+    close_btn.bind("<Return>", lambda e: (close_btn.invoke(), "break")[1])
+    close_btn.bind("<KP_Enter>", lambda e: (close_btn.invoke(), "break")[1])
+    close_btn.pack(side="right")
 
     top.update_idletasks()
     w, h = 510, 680
-    if parent:
+    if parent and parent.winfo_viewable():
         x = parent.winfo_x() + (parent.winfo_width() - w) // 2
         y = parent.winfo_y() + (parent.winfo_height() - h) // 2
     else:
@@ -439,8 +453,10 @@ def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish
     top.title(t("tut_title"))
     top.resizable(False, False)
     top.configure(bg=BG)
-    top.transient(parent)
+    if parent and parent.winfo_viewable():
+        top.transient(parent)
     top.grab_set()
+    top.bind("<Escape>", lambda e: top.destroy())
 
     _refs: list = []
 
@@ -572,15 +588,18 @@ def show_tutorial_dialog(parent: Optional[tk.Tk | tk.Toplevel] = None, on_finish
     btn_row = tk.Frame(content, bg=BG)
     btn_row.pack(fill="x", pady=(6, 0))
 
-    tk.Button(
+    got_it_btn = tk.Button(
         btn_row, text=t("tut_btn_got_it"), command=_finish,
         bg=ACCENT_BLUE, fg=TEXT_PRIMARY, activebackground=ACCENT_HOVER, activeforeground=TEXT_PRIMARY,
         relief="flat", bd=0, padx=16, pady=7, font=("Segoe UI", 10, "bold"), cursor="hand2",
-    ).pack(side="right")
+    )
+    got_it_btn.bind("<Return>", lambda e: (got_it_btn.invoke(), "break")[1])
+    got_it_btn.bind("<KP_Enter>", lambda e: (got_it_btn.invoke(), "break")[1])
+    got_it_btn.pack(side="right")
 
     top.update_idletasks()
     w, h = 530, 520
-    if parent:
+    if parent and parent.winfo_viewable():
         x = parent.winfo_x() + (parent.winfo_width() - w) // 2
         y = parent.winfo_y() + (parent.winfo_height() - h) // 2
     else:
@@ -643,18 +662,23 @@ def show_config_dialog(
         active_bg = ACCENT_HOVER if primary else (DANGER_HOVER if danger else BTN_SEC_HOVER)
         bd_col = ACCENT_BLUE if primary else (DANGER_BD if danger else BTN_SEC_BD)
 
-        return tk.Button(
+        b = tk.Button(
             parent, text=text, command=cmd,
             bg=bg_col, fg=fg_col,
             activebackground=active_bg,
             activeforeground=TEXT_PRIMARY,
             relief="flat", bd=1,
-            highlightthickness=0,
+            highlightthickness=1,
+            highlightbackground=bd_col,
+            highlightcolor="#FFFFFF" if primary else INPUT_FOCUS,
             padx=12, pady=6,
             font=("Segoe UI", 9, "bold" if primary else "normal"),
             cursor="hand2",
             **kw,
         )
+        b.bind("<Return>", lambda e: (b.invoke(), "break")[1])
+        b.bind("<KP_Enter>", lambda e: (b.invoke(), "break")[1])
+        return b
 
     # ── window icon & assets ──────────────────────────────────────────────
     assets_dir = get_assets_dir()
@@ -1130,8 +1154,10 @@ def show_config_dialog(
     def set_unlock_preset(p: str):
         unlock_hk_var.set(p)
 
-    for preset in ("Ctrl+Alt+Shift+U", "Ctrl+Alt+Shift+L", "Ctrl+Alt+Shift+K"):
-        btn(hk_row2, preset.split("+")[-1], lambda p=preset: set_unlock_preset(p)).pack(side="left", padx=2)
+    for preset in ("Ctrl+Alt+Shift", "Ctrl+Alt+Shift+U", "Ctrl+Alt+Shift+L", "Ctrl+Alt+Shift+K"):
+        # Modifiers-only preset gets a short label; letter presets keep the final key
+        label = "CAS" if preset == "Ctrl+Alt+Shift" else preset.split("+")[-1]
+        btn(hk_row2, label, lambda p=preset: set_unlock_preset(p)).pack(side="left", padx=2)
 
     def update_guide_badges(*_):
         lk = lock_hk_var.get().strip() or "F11"
@@ -1315,6 +1341,8 @@ def show_config_dialog(
         return True
 
     def build_config(lock_on_launch: bool) -> LockerConfig:
+        norm_lk = parse_hotkey(lock_hk_var.get().strip()).format()
+        norm_ulk = parse_hotkey(unlock_hk_var.get().strip()).format()
         new_cfg = LockerConfig(
             wallpaper=wp_var.get().strip(),
             lock_on_launch=lock_on_launch,
@@ -1322,8 +1350,8 @@ def show_config_dialog(
             update_repo=getattr(cfg, "update_repo", ""),
             first_run=getattr(cfg, "first_run", False),
             audio_feedback=audio_feedback_var.get(),
-            lock_hotkey=lock_hk_var.get().strip(),
-            unlock_hotkey=unlock_hk_var.get().strip(),
+            lock_hotkey=norm_lk,
+            unlock_hotkey=norm_ulk,
             language=current_lang_var.get(),
         )
         if pw_cleared[0]:
@@ -1341,6 +1369,8 @@ def show_config_dialog(
     def _update_dialog_state(new_cfg: LockerConfig):
         nonlocal cfg, has_saved_pw
         cfg = new_cfg
+        lock_hk_var.set(new_cfg.lock_hotkey or "F11")
+        unlock_hk_var.set(new_cfg.unlock_hotkey or "Ctrl+Alt+Shift+U")
         has_saved_pw = bool(new_cfg.password or new_cfg.password_hash)
         pw_cleared[0] = False
         pw_e.delete(0, tk.END)

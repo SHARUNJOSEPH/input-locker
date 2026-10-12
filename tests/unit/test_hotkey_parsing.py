@@ -49,9 +49,25 @@ class TestHotkeyParsing:
         with pytest.raises(ValueError, match="cannot be empty"):
             parse_hotkey("")
 
-    def test_parse_only_modifiers_raises(self):
-        with pytest.raises(ValueError, match="Missing base key"):
-            parse_hotkey("Ctrl+Alt")
+    def test_parse_single_modifier_raises(self):
+        with pytest.raises(ValueError, match="at least two modifiers"):
+            parse_hotkey("Ctrl")
+
+    def test_parse_modifiers_only_combo(self):
+        binding = parse_hotkey("Ctrl+Alt+Shift")
+        assert binding.vk == 0
+        assert binding.modifiers_only is True
+        assert binding.ctrl is True
+        assert binding.alt is True
+        assert binding.shift is True
+        assert binding.format() == "Ctrl+Alt+Shift"
+
+    def test_parse_two_modifiers_ok(self):
+        binding = parse_hotkey("Ctrl+Alt")
+        assert binding.vk == 0
+        assert binding.ctrl is True
+        assert binding.alt is True
+        assert binding.format() == "Ctrl+Alt"
 
     def test_parse_unknown_key_raises(self):
         with pytest.raises(ValueError, match="Unknown key"):
@@ -68,10 +84,26 @@ class TestHotkeyParsing:
         assert binding.matches(0x7A, active) is False  # Wrong VK
         assert binding.matches(0x7B, set()) is False   # Missing Ctrl
 
+    def test_modifiers_only_matching(self):
+        binding = parse_hotkey("Ctrl+Alt+Shift")
+        # All three held; trigger is Shift
+        active = {0xA2, 0xA4, 0xA0}  # LCtrl, LAlt, LShift
+        assert binding.matches(0xA0, active) is True
+        # Missing Shift
+        assert binding.matches(0xA2, {0xA2, 0xA4}) is False
+        # Extra Win held → exact modifier match fails
+        assert binding.matches(0xA0, {0xA2, 0xA4, 0xA0, 0x5B}) is False
+        # Non-modifier trigger
+        assert binding.matches(ord("U"), active) is False
+
     def test_presets_are_valid(self):
         for p in LOCK_HOTKEY_PRESETS:
             b = parse_hotkey(p)
             assert b.vk > 0
         for p in UNLOCK_HOTKEY_PRESETS:
             b = parse_hotkey(p)
-            assert b.vk > 0
+            assert b.ctrl or b.alt or b.shift or b.win or b.vk > 0
+            if b.modifiers_only:
+                assert sum((b.ctrl, b.alt, b.shift, b.win)) >= 2
+            else:
+                assert b.vk > 0

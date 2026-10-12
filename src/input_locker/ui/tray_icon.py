@@ -71,12 +71,16 @@ class TrayIcon:
         on_exit:     Callable[[], None],
         on_settings: Optional[Callable[[], None]] = None,
         on_about:    Optional[Callable[[], None]] = None,
+        on_recover_input: Optional[Callable[[], None]] = None,
+        on_check_updates: Optional[Callable[[], None]] = None,
     ) -> None:
         self._on_lock     = on_lock
         self._on_unlock   = on_unlock
         self._on_exit     = on_exit
         self._on_settings = on_settings
         self._on_about    = on_about
+        self._on_recover_input = on_recover_input
+        self._on_check_updates = on_check_updates
         self._icon: Optional[object] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -85,6 +89,12 @@ class TrayIcon:
 
     def _menu_unlock(self, icon, item) -> None:
         threading.Thread(target=self._on_unlock, daemon=True, name="TrayUnlockThread").start()
+
+    def _menu_recover_input(self, icon, item) -> None:
+        if self._on_recover_input:
+            threading.Thread(
+                target=self._on_recover_input, daemon=True, name="TrayRecoverInputThread"
+            ).start()
 
     def _menu_settings(self, icon, item) -> None:
         if self._on_settings:
@@ -95,6 +105,12 @@ class TrayIcon:
             threading.Thread(target=self._on_about, daemon=True, name="TrayAboutThread").start()
 
     def _menu_check_updates(self, icon, item) -> None:
+        if self._on_check_updates:
+            threading.Thread(
+                target=self._on_check_updates, daemon=True, name="TrayCheckUpdatesThread"
+            ).start()
+            return
+
         def _on_result(update_info):
             from input_locker import __version__
             if update_info and (update_info.get("has_update") or update_info.get("available")):
@@ -129,8 +145,12 @@ class TrayIcon:
         items = [
             pystray.MenuItem(t("tray_menu_lock"),     self._menu_lock),
             pystray.MenuItem(t("tray_menu_unlock"),   self._menu_unlock),
-            pystray.Menu.SEPARATOR,
         ]
+        if self._on_recover_input:
+            items.append(
+                pystray.MenuItem(t("tray_menu_recover_input"), self._menu_recover_input)
+            )
+        items.append(pystray.Menu.SEPARATOR)
         if self._on_settings:
             items.append(pystray.MenuItem(t("tray_menu_settings"), self._menu_settings, default=True))
         if self._on_about:

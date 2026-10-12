@@ -97,6 +97,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         # System Tray Menu
         "tray_menu_lock": "Lock Screen",
         "tray_menu_unlock": "Unlock Screen",
+        "tray_menu_recover_input": "Recover Mouse / Touchpad",
         "tray_menu_settings": "Settings...",
         "tray_menu_about": "About...",
         "tray_menu_check_updates": "Check for Updates...",
@@ -192,6 +193,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
         "tray_menu_lock": "Bloquear Pantalla",
         "tray_menu_unlock": "Desbloquear Pantalla",
+        "tray_menu_recover_input": "Recuperar ratón / panel táctil",
         "tray_menu_settings": "Configuración...",
         "tray_menu_about": "Acerca de...",
         "tray_menu_check_updates": "Buscar Actualizaciones...",
@@ -285,6 +287,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
         "tray_menu_lock": "Verrouiller l'Écran",
         "tray_menu_unlock": "Déverrouiller l'Écran",
+        "tray_menu_recover_input": "Récupérer souris / pavé tactile",
         "tray_menu_settings": "Paramètres...",
         "tray_menu_about": "À propos...",
         "tray_menu_check_updates": "Vérifier les Mises à Jour...",
@@ -378,6 +381,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
         "tray_menu_lock": "Bildschirm Sperren",
         "tray_menu_unlock": "Bildschirm Entsperren",
+        "tray_menu_recover_input": "Maus / Touchpad wiederherstellen",
         "tray_menu_settings": "Einstellungen...",
         "tray_menu_about": "Über...",
         "tray_menu_check_updates": "Nach Updates Suchen...",
@@ -471,6 +475,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
         "tray_menu_lock": "画面をロック",
         "tray_menu_unlock": "画面のロックを解除",
+        "tray_menu_recover_input": "マウス / タッチパッドを復元",
         "tray_menu_settings": "設定...",
         "tray_menu_about": "詳細情報...",
         "tray_menu_check_updates": "アップデートを確認...",
@@ -564,6 +569,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
         "tray_menu_lock": "锁定屏幕",
         "tray_menu_unlock": "解锁屏幕",
+        "tray_menu_recover_input": "恢复鼠标 / 触摸板",
         "tray_menu_settings": "设置...",
         "tray_menu_about": "关于...",
         "tray_menu_check_updates": "检查更新...",
@@ -657,6 +663,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
         "tray_menu_lock": "स्क्रीन लॉक करें",
         "tray_menu_unlock": "स्क्रीन अनलॉक करें",
+        "tray_menu_recover_input": "माउस / टचपैड पुनर्प्राप्त करें",
         "tray_menu_settings": "सेटिंग्स...",
         "tray_menu_about": "बारे में...",
         "tray_menu_check_updates": "अपडेट जांचें...",

@@ -72,9 +72,26 @@ class SoftwareUpdateDialog:
         self.top.title("Input Locker — Software Update")
         self.top.configure(bg=BG_MODAL)
         self.top.resizable(False, False)
+        self.top.bind("<Escape>", lambda e: self._on_close())
+
+        try:
+            from input_locker.config import get_assets_dir
+            assets_dir = get_assets_dir()
+            ico_path = assets_dir / "app_icon.ico"
+            if not ico_path.is_file():
+                ico_path = assets_dir / "icon.ico"
+            if ico_path.is_file():
+                self.top.iconbitmap(str(ico_path))
+        except Exception:
+            pass
+
         if parent:
-            self.top.transient(parent)
-            self.top.grab_set()
+            try:
+                if parent.winfo_viewable():
+                    self.top.transient(parent)
+                self.top.grab_set()
+            except Exception:
+                pass
 
         self._build_ui()
         self._center_window(520, 560)
@@ -86,7 +103,7 @@ class SoftwareUpdateDialog:
 
     def _center_window(self, width: int, height: int) -> None:
         self.top.update_idletasks()
-        if self.parent:
+        if self.parent and self.parent.winfo_viewable():
             x = self.parent.winfo_x() + (self.parent.winfo_width() - width) // 2
             y = self.parent.winfo_y() + (self.parent.winfo_height() - height) // 2
         else:
@@ -96,6 +113,7 @@ class SoftwareUpdateDialog:
         self.top.lift()
         self.top.attributes("-topmost", True)
         self.top.after(200, lambda: self.top.attributes("-topmost", False) if self.top.winfo_exists() else None)
+        self.top.focus_force()
 
     def _build_ui(self) -> None:
         # ── 1. Header Bar ─────────────────────────────────────────────────────
@@ -251,31 +269,39 @@ class SoftwareUpdateDialog:
         self.btn_dismiss = tk.Button(
             btn_row, text="Close", font=("Segoe UI", 9),
             bg="#1E293B", fg=TEXT_PRIMARY, activebackground="#334155", activeforeground=TEXT_PRIMARY,
-            relief="flat", bd=0, padx=14, pady=6, cursor="hand2", command=self._on_close,
+            relief="flat", bd=0, highlightthickness=1, highlightbackground="#334155", highlightcolor="#38BDF8",
+            padx=14, pady=6, cursor="hand2", command=self._on_close,
         )
         self.btn_dismiss.pack(side="right", padx=(8, 0))
 
         self.btn_download = tk.Button(
             btn_row, text="⬇️ Download Update", font=("Segoe UI", 9, "bold"),
             bg=ACCENT_BLUE, fg="#FFFFFF", activebackground=ACCENT_HOVER, activeforeground="#FFFFFF",
-            relief="flat", bd=0, padx=16, pady=6, cursor="hand2", command=self._on_download_click,
+            relief="flat", bd=0, highlightthickness=1, highlightbackground=ACCENT_BLUE, highlightcolor="#FFFFFF",
+            padx=16, pady=6, cursor="hand2", command=self._on_download_click,
         )
         self.btn_download.pack(side="right", padx=(8, 0))
 
         self.btn_install = tk.Button(
             btn_row, text="⚡ Install & Restart", font=("Segoe UI", 9, "bold"),
             bg="#059669", fg="#FFFFFF", activebackground=EMERALD_GREEN, activeforeground="#FFFFFF",
-            relief="flat", bd=0, padx=16, pady=6, cursor="hand2", command=self._on_install_click,
+            relief="flat", bd=0, highlightthickness=1, highlightbackground="#059669", highlightcolor="#FFFFFF",
+            padx=16, pady=6, cursor="hand2", command=self._on_install_click,
         )
         # hidden until downloaded
 
         self.btn_open_browser = tk.Button(
             btn_row, text="🌐 Releases Page", font=("Segoe UI", 8),
             bg="#141C2E", fg=TEXT_MUTED, activebackground="#1E293B", activeforeground=TEXT_PRIMARY,
-            relief="flat", bd=1, padx=10, pady=5, cursor="hand2",
+            relief="flat", bd=1, highlightthickness=1, highlightbackground=CARD_BORDER, highlightcolor="#38BDF8",
+            padx=10, pady=5, cursor="hand2",
             command=self._on_open_browser,
         )
         self.btn_open_browser.pack(side="left")
+
+        for b in (self.btn_download, self.btn_install, self.btn_dismiss, self.btn_open_browser):
+            b.bind("<Return>", lambda e, btn_w=b: (btn_w.invoke(), "break")[1])
+            b.bind("<KP_Enter>", lambda e, btn_w=b: (btn_w.invoke(), "break")[1])
 
     def _start_update_check(self) -> None:
         self.lbl_summary.config(text="Contacting update server for the latest release...")
@@ -307,18 +333,19 @@ class SoftwareUpdateDialog:
         clean_cur = self.current_version.lstrip("v")
 
         self.lbl_cur_ver.config(text=f"v{self.current_version}")
-        self.lbl_new_ver.config(text=f"v{clean_latest}")
+        self.lbl_new_ver.config(text=f"v{clean_latest}" if has_update else f"v{self.current_version}")
 
         # Populate Highlights Box
         for w in self.hl_list_frame.winfo_children():
             w.destroy()
 
-        highlights = info.get("highlights") or [
-            "Order-independent hotkey matching across all modifiers.",
-            "Visual unlock instruction banner on lock screen overlay.",
-            "Emergency 4x Escape rapid failsafe unlock.",
-            "Real-time low-latency AV staging performance improvements."
+        default_highlights = [
+            "Modifiers-only Ctrl+Alt+Shift (CAS preset) & single-key unlock support.",
+            "Win+L workstation lock interception & Precision Touchpad hardware cut.",
+            "Topmost password dialog with full keyboard Tab + Enter navigation.",
+            "Emergency 4x Escape rapid failsafe unlock & real-time staging performance.",
         ]
+        highlights = (info.get("highlights") if has_update else None) or default_highlights
 
         for item in highlights:
             bullet_row = tk.Frame(self.hl_list_frame, bg="#0F172A")
@@ -353,23 +380,12 @@ class SoftwareUpdateDialog:
             self.btn_download.config(text="⬇️ Download Update", command=self._on_download_click)
             self.btn_dismiss.config(text="Remind Me Later")
         else:
-            # Current version is latest or higher preview build
-            is_ahead = is_newer_version(self.current_version, clean_latest)
-            if is_ahead:
-                self.lbl_new_title.config(text="LATEST RELEASE", fg=TEXT_MUTED)
-                self.lbl_new_ver.config(text=f"v{clean_latest}", fg=TEXT_MUTED)
-                self.lbl_summary.config(
-                    text=f"✓ You are running a newer preview build (v{self.current_version}).\nLatest public release is v{clean_latest}.",
-                    fg=EMERALD_TEXT,
-                )
-            else:
-                self.lbl_new_title.config(text="UP TO DATE", fg=EMERALD_TEXT)
-                self.lbl_new_ver.config(text=f"v{self.current_version}", fg=EMERALD_TEXT)
-                self.lbl_summary.config(
-                    text=f"✓ You are already running the latest version (v{self.current_version}).\nNo update is needed!",
-                    fg=EMERALD_TEXT,
-                )
-
+            self.lbl_new_title.config(text="UP TO DATE", fg=EMERALD_TEXT)
+            self.lbl_new_ver.config(text=f"v{self.current_version}", fg=EMERALD_TEXT)
+            self.lbl_summary.config(
+                text=f"✓ You are already running the latest version (v{self.current_version}).\nNo update is needed!",
+                fg=EMERALD_TEXT,
+            )
             self.btn_download.pack_forget()
             self.btn_dismiss.config(text="Close")
 

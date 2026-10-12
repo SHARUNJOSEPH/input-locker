@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="input-locker",
-    version="0.2.10",
+    version="0.2.11",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     install_requires=[

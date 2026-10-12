@@ -1,7 +1,8 @@
-# PowerShell Build & Packaging Script for Input Locker v0.2.10
+# PowerShell Build & Packaging Script for Input Locker
 param(
     [switch]$SkipTests = $false,
-    [string]$Version = "0.2.10"
+    [switch]$SkipMsix = $false,
+    [string]$Version = "0.2.11"
 )
 
 $ErrorActionPreference = "Stop"
@@ -63,17 +64,21 @@ if ($iscc) {
     Write-Warning "Inno Setup compiler not found in candidate paths."
 }
 
-# 5. Build and Validate MSIX Package
-Write-Host "`n[5/5] Building Microsoft Store MSIX package..." -ForegroundColor Yellow
-& .\.venv\Scripts\python.exe scripts\package_msix.py $Version
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "MSIX packaging failed."
-}
+# 5. Build and Validate MSIX Package (optional)
+if (-not $SkipMsix) {
+    Write-Host "`n[5/5] Building Microsoft Store MSIX package..." -ForegroundColor Yellow
+    & .\.venv\Scripts\python.exe scripts\package_msix.py $Version
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "MSIX packaging failed."
+    }
 
-$msixPath = "dist\InputLocker-v$Version.msix"
-if (Test-Path $msixPath) {
-    $msixSize = (Get-Item $msixPath).Length / 1MB
-    Write-Host "MSIX package validated and ready: $msixPath ($([math]::Round($msixSize, 2)) MB)" -ForegroundColor Green
+    $msixPath = "dist\InputLocker-v$Version.msix"
+    if (Test-Path $msixPath) {
+        $msixSize = (Get-Item $msixPath).Length / 1MB
+        Write-Host "MSIX package validated and ready: $msixPath ($([math]::Round($msixSize, 2)) MB)" -ForegroundColor Green
+    }
+} else {
+    Write-Host "`n[5/5] Skipping MSIX package (-SkipMsix)." -ForegroundColor DarkYellow
 }
 
 Write-Host "`nAll build and packaging steps completed successfully!" -ForegroundColor Green

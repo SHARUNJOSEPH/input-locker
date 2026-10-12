@@ -162,9 +162,9 @@ class EventFilter:
             return
         try:
             KEYEVENTF_KEYUP = 0x0002
-            for mod_vk in (0x11, 0x12, 0x10, 0x5B, 0x5C):
+            for mod_vk in (0x11, 0x12, 0x10, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C):
                 if user32.GetAsyncKeyState(mod_vk) & 0x8000:
-                    user32.keybd_event(mod_vk, 0, KEYEVENTF_KEYUP, 0)
+                    user32.keybd_event(mod_vk, 0, KEYEVENTF_KEYUP, 0x494C4F4B)
         except Exception as exc:
             logger.debug("Error releasing system modifiers: %s", exc)
 
@@ -258,6 +258,11 @@ class EventFilter:
             else:
                 return True
 
+        # Allow our own synthetic neutralization key events (tagged with _SELF_INJECT_MAGIC)
+        # to pass through to win32kfull.sys without being swallowed by our own hook!
+        extra = getattr(data, "dwExtraInfo", 0) or 0
+        if extra == 0x494C4F4B:
+            return True
 
         is_down = msg in (WM_KEYDOWN, WM_SYSKEYDOWN)
         is_up = msg in (WM_KEYUP, WM_SYSKEYUP)
@@ -295,13 +300,22 @@ class EventFilter:
             elif vk in WIN_KEYS:
                 self._active_keys.difference_update(WIN_KEYS)
 
-        # Check for pending unlock keyups: swallow release of combo/modifier keys
+        # Check for pending unlock keyups: swallow auto-repeat keydowns and release of combo/modifier keys
         # even after the state machine has unlocked (swallow_active == False).
         is_pending_keyup = False
-        if is_up and self._pending_unlock_keyups:
+        if self._pending_unlock_keyups:
             if time.monotonic() - self._pending_unlock_time > 1.0:
                 self._pending_unlock_keyups.clear()
-            else:
+            elif is_down and vk in (CTRL_KEYS | ALT_KEYS | SHIFT_KEYS | WIN_KEYS):
+                if (
+                    vk in self._pending_unlock_keyups
+                    or (vk in CTRL_KEYS and bool(self._pending_unlock_keyups & CTRL_KEYS))
+                    or (vk in ALT_KEYS and bool(self._pending_unlock_keyups & ALT_KEYS))
+                    or (vk in SHIFT_KEYS and bool(self._pending_unlock_keyups & SHIFT_KEYS))
+                    or (vk in WIN_KEYS and bool(self._pending_unlock_keyups & WIN_KEYS))
+                ):
+                    is_pending_keyup = True
+            elif is_up:
                 if vk in self._pending_unlock_keyups:
                     self._pending_unlock_keyups.discard(vk)
                     is_pending_keyup = True
@@ -316,6 +330,10 @@ class EventFilter:
                 elif vk in SHIFT_KEYS:
                     if bool(self._pending_unlock_keyups & SHIFT_KEYS):
                         self._pending_unlock_keyups.difference_update(SHIFT_KEYS)
+                        is_pending_keyup = True
+                elif vk in WIN_KEYS:
+                    if bool(self._pending_unlock_keyups & WIN_KEYS):
+                        self._pending_unlock_keyups.difference_update(WIN_KEYS)
                         is_pending_keyup = True
 
         # 1. Hotkey Detection: Lock Hotkey (Dynamic binding)
@@ -337,7 +355,8 @@ class EventFilter:
             # Record currently held keys and all modifier variants for post-unlock swallowing
             self._pending_unlock_keyups.update(self._active_keys)
             self._pending_unlock_keyups.add(vk)
-            self._pending_unlock_keyups.add(self._unlock_binding.vk)
+            if self._unlock_binding.vk:
+                self._pending_unlock_keyups.add(self._unlock_binding.vk)
             if self._unlock_binding.ctrl:
                 self._pending_unlock_keyups.update(CTRL_KEYS)
             if self._unlock_binding.alt:
@@ -417,20 +436,37 @@ class EventFilter:
                 or is_gesture_combo
             )
 
-        # 3. Swallowing Determination & Win+L Neutralization:
-        # Note: Do NOT synthesize keyup for Win keys on every keydown while locked,
-        # because synthesizing an injected keyup can trigger shell hotkey completion (like Win release).
-        # We only neutralize Win+L lock attempts when L and Win are both pressed (regardless of order).
+        # 3. Swallowing Determination & Win / Win+L Neutralization:
+        # Why Win+L leaked previously:
+        # (a) EventFilter was swallowing its own user32.keybd_event() calls because
+        #     dwExtraInfo was 0; tagging with 0x494C4F4B lets them reach win32kfull.sys.
+        # (b) Waiting until 'L' is pressed to inject Win KEYUP is too late because
+        #     win32kfull.sys is already processing 'L' while Win is marked down.
+        #     By injecting a dummy mask key (0xFF down+up, preventing Start Menu)
+        #     followed by Win KEYUP as soon as Win (0x5B/0x5C) is pressed down,
+        #     win32kfull.sys clears the Win modifier state before 'L' is pressed.
         if (self._swallow_active or self._password_mode) and HAS_USER32 and user32 is not None:
-            is_l_combo = (vk == 0x4C and bool(self._active_keys & WIN_KEYS)) or (
-                vk in WIN_KEYS and (0x4C in self._active_keys or self._query_async_keystate([0x4C]))
-            )
-            if is_l_combo:
+            if is_down and vk in WIN_KEYS and not self._unlock_binding.win:
                 try:
-                    user32.keybd_event(0x5B, 0, 0x0002, 0)
-                    user32.keybd_event(0x5C, 0, 0x0002, 0)
+                    user32.keybd_event(0xFF, 0, 0, 0x494C4F4B)
+                    user32.keybd_event(0xFF, 0, 0x0002, 0x494C4F4B)
+                    user32.keybd_event(vk, 0, 0x0002, 0x494C4F4B)
                 except Exception:
                     pass
+
+            if vk == 0x4C or vk in WIN_KEYS:
+                win_held = bool(self._active_keys & WIN_KEYS) or self._query_async_keystate([0x5B, 0x5C])
+                l_held = (0x4C in self._active_keys) or self._query_async_keystate([0x4C])
+                is_l_combo = (vk == 0x4C and win_held) or (vk in WIN_KEYS and l_held)
+                if is_l_combo:
+                    try:
+                        user32.keybd_event(0x5B, 0, 0x0002, 0x494C4F4B)
+                        user32.keybd_event(0x5C, 0, 0x0002, 0x494C4F4B)
+                        user32.keybd_event(0x4C, 0, 0x0002, 0x494C4F4B)
+                        self._active_keys.difference_update(WIN_KEYS)
+                        self._active_keys.discard(0x4C)
+                    except Exception:
+                        pass
 
         # - Lock trigger key is swallowed even when unlocked so it doesn't leak to background apps
         # - When locked (swallow_active is True), ALL keys are swallowed

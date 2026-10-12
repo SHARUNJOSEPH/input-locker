@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.11] - 2026-10-12
+
+### Added
+- **Modifiers-Only (`Ctrl+Alt+Shift`) & Single-Key Unlock Combos**: Added `CAS` (`Ctrl+Alt+Shift` with no letter required) preset in Settings as well as support for single-key unlock triggers (`A`, `K`, `U`, etc.) and space-separated / concatenated hotkey strings.
+- **Resolume / PDF-Presenter-Style Software Update Manager**: Unified modal update dialog across Settings, About, and System Tray right-click menu with one-click background download, real-time progress bar, downgrade prevention (`UP TO DATE` comparison badge), and clean Markdown-stripped release highlights.
+- **Install-time Win+L policy**: Inno Setup writes `HKLM\...\DisableLockWorkstation = 1` (64-bit view, verified) so Win+L is blocked after the next sign-in. Uninstall clears the value. Helper also applies the policy at start.
+- **Tray Recover Mouse / Touchpad**: Emergency restore of cursor visibility + touchpad devices without a full unlock dance.
+- **Secure Desktop return recovery**: Watchdog detects Win+L round-trips and re-asserts cursor / overlay / touchpad restore.
+
+### Fixed
+- **Password Dialog `Tab` + `Enter` Navigation**: Fixed keyboard focus order (`Tab` from password field focuses **Unlock** first, then **Cancel**), bound `<Return>`, `<KP_Enter>`, and `<space>` on dialog buttons, and prevented periodic topmost checks from stealing focus away from focused buttons.
+- **Synthetic Modifier Release & Auto-Repeat Suppression**: Tagged synthetic modifier release events (`0x494C4F4B`) across all left/right modifier virtual keys (`0xA0..0xA5`) and suppressed held modifier auto-repeats after unlock.
+- **UTF-8 BOM Config Tolerance**: Updated `LockerConfig.load()` to read `config.json` with `utf-8-sig` so BOM-prefixed files never cause silent config resets.
+- **Unlock latency**: PnP touchpad re-enable runs asynchronously; helper `ok|enable` ack is trusted on the happy path (was ~3.6s, now under unlock budget).
+- **Stuck touchpad / invisible cursor**: Unlock, rollback, and atexit always force `ClipCursor(NULL)` + `ShowCursor`; crash-recovery and tray Recover remain safety nets.
+- **Elevated helper gating**: Helper starts even when used only for Win+L policy (no longer blocked when PnP was misconfigured off).
+- **False-positive lockpolicy ack**: Helper no longer reports success under `SilentlyContinue`; writes use the 64-bit registry view with read-back.
+
+### Changed
+- **Win+L policy ownership**: Install/uninstall (and helper start) own `DisableLockWorkstation`. Lock/unlock no longer toggle it mid-session (mid-session toggles do not affect Win+L until the next sign-in on Windows 11).
+- **Docs**: `docs/WIN_L_LIMITATIONS.md` documents the logon-scoped Win+L policy behavior (confirmed on Windows 11).
+
 ## [0.2.10] - 2026-10-09
 
 ### Added

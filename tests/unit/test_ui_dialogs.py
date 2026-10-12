@@ -113,6 +113,28 @@ class TestConfigGui(unittest.TestCase):
         # Reset to English
         set_locale("en")
 
+    def test_software_update_dialog_up_to_date_prevents_downgrade_label(self):
+        if not self.root:
+            self.skipTest("Headless environment: Tk root not available")
+        from input_locker.ui.update_dialog import SoftwareUpdateDialog
+
+        dlg = SoftwareUpdateDialog(
+            parent=self.root,
+            update_info={
+                "has_update": False,
+                "available": False,
+                "is_store": False,
+                "latest_version": "v0.2.9",
+                "clean_version": "0.2.9",
+                "current_version": __version__,
+                "highlights": ["Clean highlight item"],
+            },
+            auto_check=False,
+        )
+        self.assertEqual(dlg.lbl_new_ver.cget("text"), f"v{__version__}")
+        dlg._on_close()
+        self.root.update()
+
 
 if __name__ == "__main__":
     unittest.main()

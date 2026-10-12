@@ -5,7 +5,7 @@
 ; show a UAC prompt for PowerShell.
 
 #define MyAppName "Input Locker"
-#define MyAppVersion "0.2.10"
+#define MyAppVersion "0.2.11"
 #define MyAppPublisher "Joseph Sharun"
 #define MyAppURL "https://github.com/SHARUNJOSEPH/input-locker"
 #define MyAppExeName "InputLocker.exe"
@@ -48,6 +48,7 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "helpers\touchpad_helper.ps1"; DestDir: "{app}\helpers"; Flags: ignoreversion
 Source: "helpers\install_touchpad_task.ps1"; DestDir: "{app}\helpers"; Flags: ignoreversion
 Source: "helpers\uninstall_touchpad_task.ps1"; DestDir: "{app}\helpers"; Flags: ignoreversion
+Source: "helpers\set_lock_workstation_policy.ps1"; DestDir: "{app}\helpers"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -60,9 +61,18 @@ Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helpers\install_touchpad_task.ps1"" -HelperPath ""{app}\helpers\touchpad_helper.ps1"""; \
   Flags: runhidden waituntilterminated; \
   StatusMsg: "Registering touchpad helper (one-time)..."
+; Win+L policy (HKLM). Takes effect on the next interactive logon after install.
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helpers\set_lock_workstation_policy.ps1"" -Value 1"; \
+  Flags: runhidden waituntilterminated; \
+  StatusMsg: "Configuring Win+L policy (takes effect after next sign-in)..."
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helpers\uninstall_touchpad_task.ps1"""; \
   Flags: runhidden waituntilterminated; RunOnceId: "RemoveTouchpadTask"
+; Clear Win+L policy so uninstall leaves the machine as it was.
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helpers\set_lock_workstation_policy.ps1"" -Value 0"; \
+  Flags: runhidden waituntilterminated; RunOnceId: "ClearLockWorkstationPolicy"

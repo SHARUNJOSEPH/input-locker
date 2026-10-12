@@ -80,6 +80,10 @@ class LockerConfig:
     language: str = "auto"
     telemetry_enabled: bool = True
     install_recorded: bool = False
+    # When True, lock disables the touchpad HID via elevated PnP so 3/4-finger
+    # gestures cannot fire. Restore is verified on unlock; tray Recover retries.
+    # Default True — registry-only does not stop Dell/Alps PTP gestures.
+    touchpad_device_control: bool = True
 
     @property
     def has_password(self) -> bool:
@@ -109,7 +113,7 @@ class LockerConfig:
     def load(cls) -> "LockerConfig":
         if _CONFIG_PATH.exists():
             try:
-                data = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+                data = json.loads(_CONFIG_PATH.read_text(encoding="utf-8-sig"))
 
                 # Ensure backwards-compatibility: if password exists without hash, hash it
                 pw = data.get("password", "")
@@ -134,6 +138,7 @@ class LockerConfig:
                     language=data.get("language", "auto"),
                     telemetry_enabled=data.get("telemetry_enabled", True),
                     install_recorded=data.get("install_recorded", False),
+                    touchpad_device_control=bool(data.get("touchpad_device_control", True)),
                 )
                 # If the legacy config contained a plaintext password, immediately resave with hash-only
                 if pw:

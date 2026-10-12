@@ -91,40 +91,40 @@ def is_newer_version(remote_version: str, local_version: Optional[str] = None) -
 
 def parse_release_highlights(body: str) -> List[str]:
     """Parse release body markdown into clean, concise highlight bullet points."""
+    default_highlights = [
+        "Modifiers-only Ctrl+Alt+Shift (CAS preset) & single-key unlock support.",
+        "Win+L workstation lock interception & Precision Touchpad hardware cut.",
+        "Topmost password dialog with full keyboard Tab + Enter navigation.",
+        "Bug fixes and overall stability improvements.",
+    ]
     if not body:
-        return [
-            "Bug fixes and overall stability improvements.",
-            "Optimized input interception response time.",
-            "Enhanced staging lock screen UI."
-        ]
+        return default_highlights
 
     lines = body.strip().splitlines()
     bullets = []
     for line in lines:
         cleaned = line.strip()
+        if "full changelog" in cleaned.lower():
+            continue
         if cleaned.startswith(("- ", "* ", "• ")):
-            item = cleaned[2:].strip()
+            item = cleaned[2:].strip().replace("**", "")
             if item:
-                # Remove bold markers for display or format neatly
                 bullets.append(item)
         elif cleaned.startswith("### "):
-            header = cleaned[4:].strip()
+            header = cleaned[4:].strip().replace("**", "")
             if header:
-                bullets.append(f"{header}")
+                bullets.append(header)
 
     if not bullets:
         # Fallback to non-empty lines
         for line in lines:
-            cleaned = line.strip()
-            if cleaned and not cleaned.startswith("#"):
+            cleaned = line.strip().replace("**", "")
+            if cleaned and not cleaned.startswith("#") and "full changelog" not in cleaned.lower():
                 bullets.append(cleaned)
                 if len(bullets) >= 4:
                     break
 
-    return bullets[:5] or [
-        "Bug fixes and stability improvements.",
-        "Performance optimization."
-    ]
+    return bullets[:5] or default_highlights
 
 
 def check_for_updates(

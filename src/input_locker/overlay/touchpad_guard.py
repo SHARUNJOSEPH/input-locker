@@ -281,6 +281,36 @@ while ($true) {{
             Set-Content -Path $ackPath -Value 'ok|enable' -Encoding ASCII
             continue
         }}
+        if ($action -eq 'lockpolicy') {{
+            $val = 0
+            if ($parts.Length -gt 1 -and $parts[1]) {{
+                try {{ $val = [int]$parts[1] }} catch {{ $val = 0 }}
+            }}
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = 'Stop'
+            try {{
+                foreach ($hive in @(
+                    [Microsoft.Win32.RegistryHive]::CurrentUser,
+                    [Microsoft.Win32.RegistryHive]::LocalMachine
+                )) {{
+                    $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+                        $hive,
+                        [Microsoft.Win32.RegistryView]::Registry64
+                    )
+                    $key = $base.CreateSubKey('SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System')
+                    $key.SetValue('DisableLockWorkstation', [int]$val, [Microsoft.Win32.RegistryValueKind]::DWord)
+                    $readBack = [int]$key.GetValue('DisableLockWorkstation')
+                    $key.Close(); $base.Close()
+                    if ($readBack -ne $val) {{ throw 'read-back mismatch' }}
+                }}
+                Set-Content -Path $ackPath -Value ('ok|lockpolicy|' + $val) -Encoding ASCII
+            }} catch {{
+                Set-Content -Path $ackPath -Value ('err|lockpolicy') -Encoding ASCII
+            }} finally {{
+                $ErrorActionPreference = $prevEap
+            }}
+            continue
+        }}
         Set-Content -Path $ackPath -Value ('err|unknown|' + $action) -Encoding ASCII
     }}
     Start-Sleep -Milliseconds 50
@@ -425,11 +455,10 @@ class TouchpadGuard:
         Prefer the install-time scheduled task (``schtasks /Run``). Fall back to a
         one-shot ``RunAs`` launch only when the task is missing (portable / source).
 
-        Call from the application entrypoint after enabling device control.
+        Always allowed: the helper is also used for HKLM DisableLockWorkstation
+        (Win+L), which must work even when PnP device_control is off.
         Returns True if the helper is running (already was, or just started).
         """
-        if not cls.device_control_enabled:
-            return False
         if _helper_alive():
             cls._helper_started = True
             logger.info("Touchpad elevated helper already running")
@@ -474,7 +503,7 @@ class TouchpadGuard:
 
     @classmethod
     def _send_helper_command(cls, action: str, ids: List[str], timeout: float = _HELPER_ACK_TIMEOUT_S) -> bool:
-        """Send disable/enable/quit to the elevated helper and wait for ack."""
+        """Send disable/enable/quit/lockpolicy to the elevated helper and wait for ack."""
         if not _helper_alive():
             return False
         try:
@@ -514,6 +543,36 @@ class TouchpadGuard:
         except Exception as exc:
             logger.warning("Touchpad helper command '%s' failed: %s", action, exc)
             return False
+
+    @classmethod
+    def refresh_lock_workstation_policy(cls) -> None:
+        """Notify Windows (userenv + WM_SETTINGCHANGE 'Policy') to reload HKCU/HKLM policies."""
+        try:
+            userenv = ctypes.windll.userenv
+            userenv.RefreshPolicyEx(False, 1)  # user policy (RP_FORCE)
+            userenv.RefreshPolicyEx(True, 1)   # machine policy (RP_FORCE)
+        except Exception:
+            pass
+        try:
+            user32 = ctypes.windll.user32
+            res = ctypes.c_ulong()
+            user32.SendMessageTimeoutW(0xFFFF, 0x001A, 0, "Policy", 0x0002, 500, ctypes.byref(res))
+            user32.SendMessageTimeoutW(0xFFFF, 0x001A, 1, "Policy", 0x0002, 500, ctypes.byref(res))
+        except Exception:
+            pass
+
+    @classmethod
+    def set_lock_workstation_policy(cls, disabled: bool) -> bool:
+        """Set DisableLockWorkstation via elevated helper (HKCU + HKLM) when available."""
+        if not (_helper_alive() or cls.ensure_elevated_helper()):
+            return False
+        ok = cls._send_helper_command("lockpolicy", ["1" if disabled else "0"], timeout=5.0)
+        if ok:
+            cls.refresh_lock_workstation_policy()
+            logger.info("HKCU+HKLM DisableLockWorkstation set to %s via helper", int(bool(disabled)))
+        else:
+            logger.warning("Helper lockpolicy command failed (disabled=%s)", disabled)
+        return ok
 
     @classmethod
     def cut_touchpad(cls) -> bool:
@@ -578,13 +637,47 @@ class TouchpadGuard:
             return False
 
     @classmethod
+    def _start_device_restore_async(cls) -> None:
+        """Run _restore_devices on a daemon thread so unlock UI is not blocked."""
+        import threading
+
+        # Snapshot ids for the worker; clear the live list so a second unlock is a no-op.
+        ids = list(cls._disabled_device_ids)
+        if not ids:
+            return
+
+        def _worker() -> None:
+            try:
+                cls._disabled_device_ids = list(ids)
+                ok = cls._restore_devices()
+                if ok:
+                    logger.info("Async touchpad device restore completed OK")
+                else:
+                    logger.warning(
+                        "Async touchpad device restore incomplete — use tray Recover if needed"
+                    )
+            except Exception as exc:
+                logger.warning("Async touchpad device restore error: %s", exc)
+
+        worker = threading.Thread(target=_worker, name="TouchpadDeviceRestore", daemon=True)
+        cls._device_worker = worker
+        worker.start()
+
+    @classmethod
     def restore_touchpad(cls) -> bool:
-        """Restore touchpad and multi-finger gestures upon unlock."""
+        """Restore touchpad and multi-finger gestures upon unlock.
+
+        Registry/gesture restore is synchronous and near-instant. PnP device
+        re-enable runs asynchronously so unlock UI is not blocked ~3s on the
+        Enable-PnpDevice + status poll path. Crash state file still tracks ids
+        until the async worker clears them; ``recover_if_stale`` / tray Recover
+        remain the safety net.
+        """
         # Wait for any in-flight device disable so we re-enable what it actually disabled.
         cls._join_device_worker()
         if not cls._is_cut:
             if cls._disabled_device_ids:
-                cls._restore_devices()
+                cls._start_device_restore_async()
             return True
         try:
             # 1. Restore Status\\Enabled
@@ -620,13 +713,13 @@ class TouchpadGuard:
             cls._original_status_enabled = None
             cls._original_gestures.clear()
 
-            # 3. Re-enable the touchpad device (elevated)
+            # 3. Re-enable devices in the background (do not block unlock UI).
             if cls._disabled_device_ids:
-                cls._restore_devices()
+                cls._start_device_restore_async()
 
             # 4. Broadcast WM_SETTINGCHANGE
             cls._notify_system()
-            logger.info("Precision Touchpad and gestures restored successfully")
+            logger.info("Precision Touchpad and gestures restored (device enable async)")
             return True
         except Exception as exc:
             logger.warning("restore_touchpad error: %s", exc)
@@ -680,10 +773,26 @@ class TouchpadGuard:
 
     @classmethod
     def _start_device_cut_async(cls) -> None:
-        """Run _cut_devices on a daemon thread, tracked so restore can join it."""
+        """Run _cut_devices on a daemon thread, tracked so restore can join it.
+
+        If a previous restore worker is still finishing in the background (e.g.
+        user unlocked and re-locked within ~1s), wait for it inside the new
+        worker thread before cutting so _cut_devices never sees stale
+        _disabled_device_ids or gets undone by a late enable.
+        """
         import threading
 
-        worker = threading.Thread(target=cls._cut_devices, name="TouchpadDeviceCut", daemon=True)
+        prev_worker = cls._device_worker
+
+        def _worker() -> None:
+            if prev_worker is not None and prev_worker.is_alive():
+                try:
+                    prev_worker.join(timeout=_UAC_TIMEOUT_S + 5)
+                except Exception:
+                    pass
+            cls._cut_devices()
+
+        worker = threading.Thread(target=_worker, name="TouchpadDeviceCut", daemon=True)
         cls._device_worker = worker
         worker.start()
 
@@ -777,35 +886,50 @@ class TouchpadGuard:
 
     @classmethod
     def _restore_devices(cls) -> bool:
-        """Re-enable any touchpad device we disabled. Keeps the record if it fails."""
+        """Re-enable any touchpad device we disabled.
+
+        Happy path: trust helper ``ok|enable`` ack (same as disable) and skip the
+        slow Get-PnpDevice status round-trip. One verified retry only if the helper
+        is unavailable.
+        """
         ids = list(cls._disabled_device_ids)
         if not ids:
             return True
 
         used_helper = False
-        if _helper_alive():
-            used_helper = cls._send_helper_command("enable", ids)
+        if _helper_alive() or cls.ensure_elevated_helper():
+            used_helper = cls._send_helper_command("enable", ids, timeout=_HELPER_ACK_TIMEOUT_S)
             if used_helper:
-                logger.info("Touchpad enable sent via elevated helper")
+                cls._disabled_device_ids = []
+                _clear_state()
+                logger.info(
+                    "Touchpad enable sent via elevated helper — trusted ack (%d device(s))",
+                    len(ids),
+                )
+                return True
 
-        if not used_helper:
-            try:
-                _run_powershell(_enable_script(ids), elevated=True, timeout=_UAC_TIMEOUT_S)
-            except Exception as exc:
-                logger.warning("Elevated touchpad enable did not complete: %s", exc)
-                return False
+        # Fallback: one-shot elevated script + a single status check.
+        try:
+            _run_powershell(_enable_script(ids), elevated=True, timeout=_UAC_TIMEOUT_S)
+        except Exception as exc:
+            logger.warning("Elevated touchpad enable did not complete: %s", exc)
+            return False
 
+        time.sleep(0.3)
+        statuses = _device_statuses(ids)
         remaining = [
-            i for i, st in _device_statuses(ids).items() if st not in ("OK", "Missing")
+            i for i in ids
+            if statuses.get(i, "unknown") not in ("OK", "Missing")
         ]
         if remaining:
             cls._disabled_device_ids = remaining
             _write_state(remaining)
-            logger.warning("Touchpad device(s) still disabled: %d", len(remaining))
+            logger.warning("Touchpad device(s) still disabled: %s", remaining)
             return False
 
         cls._disabled_device_ids = []
         _clear_state()
+        logger.info("Touchpad device(s) re-enabled and verified (%d)", len(ids))
         return True
 
     @classmethod

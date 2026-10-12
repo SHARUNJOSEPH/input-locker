@@ -80,7 +80,11 @@ for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
 
 @dataclass(frozen=True)
 class HotkeyBinding:
-    """Represents a validated key combination."""
+    """Represents a validated key combination.
+
+    ``vk == 0`` means modifiers-only (e.g. Ctrl+Alt+Shift): match when all
+    required modifiers are held and the trigger key is one of those modifiers.
+    """
     vk: int
     ctrl: bool = False
     alt: bool = False
@@ -88,15 +92,20 @@ class HotkeyBinding:
     win: bool = False
     raw_str: str = ""
 
+    @property
+    def modifiers_only(self) -> bool:
+        return self.vk == 0
+
     def matches(self, trigger_vk: int, active_keys: Set[int]) -> bool:
         """Check if incoming key and currently held keys satisfy this binding.
 
         Supports order-independent activation: triggers if trigger_vk is either the base
         key or any of the required modifier keys, provided all required keys are currently held
-        in active_keys.
+        in active_keys. Modifiers-only bindings (vk==0) fire on the last required modifier down.
         """
-        # Determine all keys valid for this combination
-        combo_keys: Set[int] = {self.vk}
+        combo_keys: Set[int] = set()
+        if self.vk:
+            combo_keys.add(self.vk)
         if self.ctrl:
             combo_keys.update(CTRL_KEYS)
         if self.alt:
@@ -110,10 +119,9 @@ class HotkeyBinding:
         if trigger_vk not in combo_keys:
             return False
 
-        # Base key must be pressed: either it is the current trigger or already held
-        if trigger_vk != self.vk:
-            if self.vk not in active_keys:
-                return False
+        # Base key must be pressed (skip for modifiers-only bindings)
+        if self.vk and trigger_vk != self.vk and self.vk not in active_keys:
+            return False
 
         has_ctrl = bool(active_keys & CTRL_KEYS)
         has_alt = bool(active_keys & ALT_KEYS)
@@ -139,36 +147,53 @@ class HotkeyBinding:
         if self.win:
             parts.append("Win")
 
-        # Find key name for vk
-        key_name = None
-        for name, code in _NAMED_KEYS.items():
-            if code == self.vk and (name.startswith("F") or len(name) == 1):
-                key_name = name
-                break
-        if not key_name:
+        if self.vk:
+            key_name = None
             for name, code in _NAMED_KEYS.items():
-                if code == self.vk:
+                if code == self.vk and (name.startswith("F") or len(name) == 1):
                     key_name = name
                     break
-        parts.append(key_name or f"0x{self.vk:02X}")
+            if not key_name:
+                for name, code in _NAMED_KEYS.items():
+                    if code == self.vk:
+                        key_name = name
+                        break
+            parts.append(key_name or f"0x{self.vk:02X}")
         return "+".join(parts)
 
 
 def parse_hotkey(hotkey_str: str) -> HotkeyBinding:
     """Parse a hotkey string into a validated HotkeyBinding.
-    
+
     Examples:
         'F11' -> HotkeyBinding(vk=0x7A)
         'Ctrl+F12' -> HotkeyBinding(vk=0x7B, ctrl=True)
         'Ctrl + Alt + Shift + U' -> HotkeyBinding(vk=0x55, ctrl=True, alt=True, shift=True)
-        
+        'Ctrl+Alt+Shift' -> HotkeyBinding(vk=0, ctrl=True, alt=True, shift=True)  # modifiers-only
+
     Raises:
         ValueError: If string syntax is invalid or base key cannot be resolved.
     """
     if not hotkey_str or not hotkey_str.strip():
         raise ValueError("Hotkey string cannot be empty")
 
-    tokens = [t.strip().upper() for t in hotkey_str.replace("-", "+").split("+") if t.strip()]
+    raw_tokens = [t.strip().upper() for part in hotkey_str.replace("-", "+").split("+") for t in part.split() if t.strip()]
+    tokens: List[str] = []
+    for tok in raw_tokens:
+        if tok not in ("CTRL", "CONTROL", "ALT", "MENU", "SHIFT", "WIN", "WINDOWS", "SUPER") and tok not in _NAMED_KEYS and not tok.startswith("0X"):
+            matched_mod = False
+            for mod_prefix in ("CONTROL", "WINDOWS", "SHIFT", "SUPER", "CTRL", "MENU", "ALT", "WIN"):
+                if tok.startswith(mod_prefix):
+                    rest = tok[len(mod_prefix):]
+                    if rest in _NAMED_KEYS or rest.startswith("0X"):
+                        tokens.append(mod_prefix)
+                        tokens.append(rest)
+                        matched_mod = True
+                        break
+            if not matched_mod:
+                tokens.append(tok)
+        else:
+            tokens.append(tok)
     if not tokens:
         raise ValueError(f"No keys found in '{hotkey_str}'")
 
@@ -195,9 +220,15 @@ def parse_hotkey(hotkey_str: str) -> HotkeyBinding:
             base_key_token = t
 
     if base_key_token is None:
-        raise ValueError(f"Missing base key in hotkey combo '{hotkey_str}' (only modifiers found)")
-
-    if base_key_token not in _NAMED_KEYS:
+        # Modifiers-only: require at least two modifiers to avoid accidental single-key unlocks
+        modifier_count = sum((ctrl, alt, shift, win))
+        if modifier_count < 2:
+            raise ValueError(
+                f"Modifiers-only hotkey '{hotkey_str}' needs at least two modifiers "
+                "(e.g. Ctrl+Alt+Shift)"
+            )
+        vk = 0
+    elif base_key_token not in _NAMED_KEYS:
         # Check if it's hex 0x..
         if base_key_token.startswith("0X"):
             try:
@@ -231,6 +262,7 @@ LOCK_HOTKEY_PRESETS: List[str] = [
 ]
 
 UNLOCK_HOTKEY_PRESETS: List[str] = [
+    "Ctrl+Alt+Shift",
     "Ctrl+Alt+Shift+U",
     "Ctrl+Alt+Shift+L",
     "Ctrl+Alt+Shift+K",
