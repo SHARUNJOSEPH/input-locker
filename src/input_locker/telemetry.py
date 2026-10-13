@@ -66,6 +66,14 @@ def _send_aptabase_event(event_name: str, props: Optional[Dict[str, Any]] = None
         }
     ]
 
+    # Enforce HTTP(S) scheme before urlopen (CWE-22 / Bandit B310).
+    if not APTABASE_ENDPOINT.startswith(("http://", "https://")):
+        logger.warning(
+            "Telemetry endpoint rejected for non-HTTP(S) scheme: %s",
+            APTABASE_ENDPOINT,
+        )
+        return False
+
     try:
         data = json.dumps(event_payload).encode("utf-8")
         req = urllib.request.Request(
@@ -77,7 +85,8 @@ def _send_aptabase_event(event_name: str, props: Optional[Dict[str, Any]] = None
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT) as resp:
+        # Scheme validated above; urlopen only reaches trusted Aptabase HTTPS endpoint.
+        with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT) as resp:  # nosec B310
             return resp.status in (200, 201, 202)
     except Exception as exc:
         logger.debug("Telemetry dispatch failed (offline or unreachable): %s", exc)

@@ -70,6 +70,15 @@ def test_send_aptabase_event_network_failure(mock_urlopen):
     assert result is False
 
 
+@patch("urllib.request.urlopen")
+@patch("input_locker.telemetry.APTABASE_ENDPOINT", "file:///tmp/evil")
+def test_send_aptabase_event_blocks_insecure_scheme(mock_urlopen):
+    """Non-HTTP(S) schemes must be rejected before urlopen (Bandit B310 / CWE-22)."""
+    result = _send_aptabase_event("test_event")
+    assert result is False
+    mock_urlopen.assert_not_called()
+
+
 @patch("input_locker.telemetry._send_aptabase_event")
 def test_record_startup_telemetry_first_install(mock_send):
     """On first run, both app_installed and app_started events are fired, and install is marked."""
