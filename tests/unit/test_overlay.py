@@ -442,6 +442,7 @@ class TestPyQtOverlay:
 
     def test_pyqt_overlay_retains_toolwindow(self):
         """Verifies PyQt overlay retains WS_EX_TOOLWINDOW for universal virtual desktop pinning."""
+        from PyQt6.QtCore import Qt
         with PyQtOverlay() as overlay:
             overlay.prewarm()
             overlay.show()
@@ -450,9 +451,13 @@ class TestPyQtOverlay:
             WS_EX_TOOLWINDOW_FLAG = 0x00000080
             user32 = ctypes.windll.user32
             for w in overlay._widgets:
+                assert bool(w.windowFlags() & Qt.WindowType.Tool), (
+                    "Qt.WindowType.Tool flag must be retained on PyQt overlay"
+                )
                 hwnd = int(w.winId())
-                ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-                assert (ex_style & WS_EX_TOOLWINDOW_FLAG) != 0, "WS_EX_TOOLWINDOW must be retained on PyQt overlay"
+                if user32.IsWindow(hwnd):
+                    ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                    assert (ex_style & WS_EX_TOOLWINDOW_FLAG) != 0, "WS_EX_TOOLWINDOW must be retained on PyQt overlay"
             overlay.hide()
 
     def test_pyqt_overlay_with_wallpaper_renders_lock_badge(self, tmp_path):

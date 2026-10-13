@@ -318,6 +318,10 @@ class _OverlayBridge(QObject):
 
             # Retain WS_EX_TOOLWINDOW: in Windows 10/11, WS_EX_TOOLWINDOW ensures the
             # overlay renders across all virtual desktops (blocks 4-finger swipe bypass).
+            if _user32.IsWindow(hwnd):
+                ex_style = _user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                if not (ex_style & WS_EX_TOOLWINDOW_FLAG):
+                    _user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TOOLWINDOW_FLAG)
 
             _user32.SetWindowPos(
                 hwnd, HWND_TOPMOST,
